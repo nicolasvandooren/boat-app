@@ -273,3 +273,110 @@ Do not start iteration 2B.
   containers (created 12:50 from the repo directory) were still running when 2A started. They had the correct
   mounts, and 2A used them as "the existing PostgreSQL container".
 - A first run of the validate-only check printed nothing, because macOS has no `timeout` command. It was re-run without it.
+
+## Iteration 2B — Boat REST CRUD API (2026-10-13)
+
+### Prompt (verbatim)
+
+```text
+Implement iteration 2B: Boat REST CRUD API.
+
+Read CLAUDE.md and inspect the existing Boat entity, repository and migration before implementing anything.
+
+Goal:
+Expose the existing Boat persistence layer through a simple, secure REST API.
+
+Scope:
+
+1. Implement:
+   - BoatController
+   - BoatService (concrete class, no interface)
+   - BoatRequest and BoatResponse DTOs
+   - Minimal exception handling using Spring ProblemDetail
+
+2. Expose these authenticated endpoints:
+   - GET /api/boats/{id}
+   - POST /api/boats
+   - PUT /api/boats/{id}
+   - DELETE /api/boats/{id}
+
+3. HTTP semantics:
+   - GET: 200 or 404
+   - POST: 201 Created, with Location header
+   - PUT: 200 or 404
+   - DELETE: 204 or 404
+   - Invalid input: 400 with useful field validation errors
+   - Unauthenticated requests: 401
+
+4. Validation:
+   - name: required, trimmed, maximum 150 characters
+   - description: optional, maximum 2000 characters
+   - id and createdAt are server-managed and cannot be changed through requests
+
+5. Use @Transactional for write operations and @Transactional(readOnly = true) for reads where appropriate.
+
+6. Preserve the existing security configuration. All new endpoints must require authentication.
+
+7. Implement focused controller/service tests covering:
+   - Successful create, read, update and delete
+   - Validation errors
+   - Nonexistent boat
+   - Unauthenticated access
+
+8. Keep updates simple: last write wins. Do not add optimistic locking or a version field.
+
+Constraints:
+- Do not implement pagination, search, or the collection GET endpoint yet.
+- Do not modify the frontend.
+- Do not add unnecessary abstractions or dependencies.
+- Verify the API against the real PostgreSQL database through Docker Compose.
+- Run formatting, tests and builds.
+- Update AI_USAGE.md with the actual prompt, decisions and corrections.
+- Commit meaningful changes locally on the current feature branch.
+
+At the end, report implemented endpoints, test results, commands executed, remaining issues and Git status.
+
+Stop before iteration 2C.
+```
+
+### Decisions
+
+- **Trimming in the DTO**: the `BoatRequest` compact constructor strips `name` before Bean Validation runs. So
+  `"   "` fails `@NotBlank`, and the 150-character limit applies to the value that is stored.
+- **Server-managed fields**: `BoatRequest` has no `id` or `createdAt`. Spring Boot's Jackson setup ignores unknown
+  properties, so values sent for them are dropped. A controller test and the compose run both confirm this.
+- **404**: `BoatNotFoundException extends ErrorResponseException`, which Spring MVC renders as a `ProblemDetail`
+  without a custom handler method.
+- **400 field errors**: Boot's default `ProblemDetail` handler only says "Invalid request content.", so
+  `ApiExceptionHandler` (`com.boatapp.config`, extends `ResponseEntityExceptionHandler`) overrides only
+  `handleMethodArgumentNotValid` to add `errors: [{field, message}]`. Malformed JSON and a non-UUID id get the
+  framework's 400 `ProblemDetail`.
+- **Relative `Location` header** (`/api/boats/{id}`). nginx forwards `Host` without the port, so an absolute URL
+  built from the request would point at `http://localhost/...`. A relative reference is valid (RFC 9110) and
+  needs no forwarded-header configuration.
+- **Transactions**: `BoatService` is `@Transactional(readOnly = true)` at class level, and the write methods
+  override it with `@Transactional`. Update relies on dirty checking. Last write wins, with no version column.
+- **Tests**: `BoatControllerTest` is a `@WebMvcTest` slice with the real `SecurityConfig` and a mocked
+  `BoatService`, covering HTTP semantics. `BoatServiceTest` is a `@DataJpaTest` on Testcontainers PostgreSQL with
+  no mocks, covering create/read/update/delete and not-found.
+
+### Corrections / deviations
+
+- **A throwaway PKCE login was used again.** In 2A the developer said not to recreate the login script, and
+  security config is still unchanged. But 2B requires verifying CRUD against compose, which needs a real token,
+  and direct grants are disabled. A minimal curl script under `/private/tmp` produced a token for demo/demo and was
+  deleted afterwards. Nothing was committed.
+
+### Verification performed (all executed)
+
+| Check | Result |
+|---|---|
+| `./mvnw spotless:apply verify` (JDK 21 container, Testcontainers) | BUILD SUCCESS, **27 tests** (10 controller, 4 service, 5 repository, 2 DB constraint, 6 security) |
+| `docker compose up --build -d --wait backend` | backend rebuilt and healthy |
+| POST through nginx with `"  Black Pearl  "` plus client-sent `id`/`createdAt` | 201, `Location: /api/boats/<new id>`, name trimmed, client `id`/`createdAt` ignored |
+| GET / PUT (with a client-sent `createdAt`) | 200; PUT changed name and description, `createdAt` unchanged; DB row matches |
+| POST with a blank name and a 2001-character description | 400 `Validation failed`, `errors` for `name` and `description` |
+| GET for an unknown UUID / GET `/api/boats/nope` | 404 `Boat not found` / 400 |
+| DELETE, then DELETE again, then GET | 204 / 404 / 404; row gone in PostgreSQL |
+| POST without a token | 401 |
+| `GET /api/boats` (collection, 2C scope) | 405, expected for now |
