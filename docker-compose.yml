@@ -1,0 +1,84 @@
+# Local development stack. All credentials below are local-only defaults (see .env.example).
+#
+# URL coherence:
+#   Browser  -> frontend  http://localhost:3000 (nginx proxies /api to backend:8080)
+#   Browser  -> Keycloak  http://localhost:8081 (KC_HOSTNAME, so every token has this issuer)
+#   Backend  -> Keycloak  http://keycloak:8080  (JWKS only; issuer is still checked against localhost:8081)
+
+name: boatapp
+
+services:
+  postgres:
+    image: postgres:17.9-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-boatapp}
+      POSTGRES_USER: ${POSTGRES_USER:-boatapp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-boatapp}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HOSTNAME: http://localhost:8081
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./keycloak/realm-boatapp.json:/opt/keycloak/data/import/realm-boatapp.json:ro
+    ports:
+      - "8081:8080"
+    healthcheck:
+      # The image ships without curl/wget; use bash's /dev/tcp against the management port.
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status": "UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  backend:
+    build: ./backend
+    image: boatapp-backend:local
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-boatapp}
+      DB_USERNAME: ${POSTGRES_USER:-boatapp}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-boatapp}
+      OIDC_ISSUER_URI: http://localhost:8081/realms/boatapp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/boatapp/protocol/openid-connect/certs
+      OIDC_AUDIENCE: boat-api
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_OIDC_AUTHORITY: http://localhost:8081/realms/boatapp
+        VITE_OIDC_CLIENT_ID: boat-frontend
+    image: boatapp-frontend:local
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
