@@ -1,0 +1,26 @@
+:root {
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+  color: #1f2933;
+  background: #f7f9fb;
+}
+
+body {
+  margin: 0;
+}
+
+.container {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+button {
+  font: inherit;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+[role='alert'] {
+  color: #b42318;
+}
