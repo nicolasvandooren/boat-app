@@ -42,11 +42,16 @@ the `boat-api` audience, and fetches signing keys over the internal Docker netwo
 
 ## Local development
 
-```bash
-# infrastructure only
-docker compose up -d postgres keycloak
+The Compose PostgreSQL is not published to the host, so a backend running outside Docker needs its own database.
+See [backend/README.md](backend/README.md#local-development) for details.
 
-# backend (needs JDK 21)
+```bash
+# Keycloak from Compose, plus a standalone PostgreSQL on localhost:5432
+docker compose up -d keycloak
+docker run -d --name boatapp-dev-db -p 5432:5432 \
+  -e POSTGRES_DB=boatapp -e POSTGRES_USER=boatapp -e POSTGRES_PASSWORD=boatapp postgres:17.9-alpine
+
+# backend on :8080 (needs JDK 21)
 cd backend && ./mvnw spring-boot:run
 
 # frontend (http://localhost:5173, proxies /api to localhost:8080)
