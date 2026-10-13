@@ -380,3 +380,38 @@ Stop before iteration 2C.
 | DELETE, then DELETE again, then GET | 204 / 404 / 404; row gone in PostgreSQL |
 | POST without a token | 401 |
 | `GET /api/boats` (collection, 2C scope) | 405, expected for now |
+
+### Validation error security regression test
+
+**Prompt (verbatim):**
+
+```text
+Add a focused security regression test for `ApiExceptionHandler.handleMethodArgumentNotValid`.
+
+**Goal:** Ensure validation error responses provide useful feedback without leaking user-submitted values or internal implementation details.
+
+Requirements:
+
+1. Add a MockMvc test that submits an invalid `BoatRequest` containing a distinctive, potentially sensitive input value.
+2. Verify that the response:
+   - Returns HTTP 400 with `application/problem+json`.
+   - Includes the expected `title`, `detail`, and `errors` structure.
+   - Identifies the invalid field and provides a safe validation message.
+   - Does **not** expose the submitted input value.
+   - Does **not** expose stack traces, Java class names, SQL queries, database details, or internal exception messages.
+3. Use realistic assertions against the actual response body, not only checks against the exception handler implementation.
+4. Preserve the existing API error contract and avoid introducing unnecessary abstractions.
+5. Run the relevant tests and formatting checks.
+
+If the test reveals an actual information disclosure, propose the smallest appropriate fix and explain it before modifying production code.
+
+Keep this change limited to validation error security testing and report the results.
+```
+
+**AI assistance:** Claude Code implemented a regression test verifying that validation error responses do not disclose user-submitted values or internal implementation details.
+
+**Verification:** The test was executed against the actual HTTP response using MockMvc. To verify its effectiveness, a temporary information disclosure was intentionally introduced into `ApiExceptionHandler` (the temporary change appended the rejected value, `getRejectedValue()`, to each error message). The test failed as expected. The original implementation was restored, and all 28 backend tests passed.
+
+**Human oversight:** The test requirements and information disclosure risks were reviewed before implementation. No production changes were necessary.
+
+**Limitations:** The test covers field validation errors, not every possible exception or error response.
