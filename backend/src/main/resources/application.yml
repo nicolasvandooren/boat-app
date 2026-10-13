@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: boat-app
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/boatapp}
+    username: ${DB_USERNAME:boatapp}
+    password: ${DB_PASSWORD:boatapp}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+  mvc:
+    problemdetails:
+      enabled: true
+
+app:
+  security:
+    # Public issuer as seen by the browser; must match the "iss" claim exactly.
+    issuer-uri: ${OIDC_ISSUER_URI:http://localhost:8081/realms/boatapp}
+    # Key set fetched by the backend; inside Docker this is the internal Keycloak hostname.
+    jwk-set-uri: ${OIDC_JWK_SET_URI:http://localhost:8081/realms/boatapp/protocol/openid-connect/certs}
+    audience: ${OIDC_AUDIENCE:boat-api}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
