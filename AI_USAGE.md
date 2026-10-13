@@ -606,3 +606,54 @@ Proceed with implementation, run the tests, make meaningful local commits, and s
 | Cleanup | 27 × DELETE → 204, deleted id → 404, `boats` count back to 0; no errors or 500s in backend logs |
 
 **Not verified:** the frontend (out of scope, unchanged). CI on GitHub (nothing pushed).
+
+### Unexpected server error regression check
+
+**Prompt (verbatim):**
+
+```text
+Perform one focused backend regression check for unexpected server errors.
+
+Goal: Verify that an unexpected exception in an authenticated API request produces HTTP 500, rather than being incorrectly transformed into HTTP 401 by Spring Security during error dispatch.
+
+Requirements:
+1. Add a focused integration-style test using the existing Spring MVC and Security test infrastructure.
+2. Simulate an unexpected server-side exception from a protected endpoint.
+3. Verify the actual HTTP response status is 500.
+4. Do not expose exception messages, stack traces, SQL information or internal implementation details in the response body.
+5. Do not introduce a broad catch-all exception handler solely to pass the test.
+6. If the test reveals a problem, explain the root cause and propose the smallest security configuration change before implementing it.
+7. If a MockMvc test cannot reproduce the real servlet error dispatch behavior, report that limitation and propose a minimal runtime verification instead.
+
+Keep the change focused. Do not modify unrelated code or introduce new architectural abstractions.
+
+Document meaningful findings in AI_USAGE.md. Run the relevant tests and formatting checks, commit locally, and do not push automatically.
+```
+
+**MockMvc limitation:** MockMvc has no servlet container. An unhandled exception propagates out of `perform()` as a
+`ServletException`, and the container's error dispatch to `/error` never happens. That dispatch is where Spring
+Security could turn an error into 401. So MockMvc cannot answer this question.
+
+**Approach:** the new `UnexpectedErrorDispatchTest` uses `@SpringBootTest(webEnvironment = RANDOM_PORT)`, which
+runs a real embedded Tomcat with the real `SecurityConfig` filter chain. It uses the existing
+`PostgresTestContainer` for the datasource and `TestRestTemplate` for real HTTP calls. Two things are mocked:
+`BoatService.get` throws `IllegalStateException("S3CR3T-internal-detail select * from boats")`, and `JwtDecoder`
+accepts a fixed token so no Keycloak is needed (issuer and audience validation stay covered by `TokenValidatorTest`).
+
+**Findings:**
+
+- **No problem found; no production change.** The authenticated request returns **500**. The body is Spring Boot's
+  `/error` JSON (`"status":500`, `"error":"Internal Server Error"`), which proves the container error dispatch
+  happened. The body does not contain the exception message, marker, class names, `select`, or a stack trace. The
+  message appears only in the server log. The same endpoint without a token returns 401.
+- **The test is sensitive to the risk it targets.** A temporary, uncommitted `.requestMatchers("/error").denyAll()`
+  in `SecurityConfig` made the test fail with `expected 500 but was 403`. This shows the `/error` dispatch really
+  passes through the security filter chain, and that the authenticated context survives it in the real
+  configuration. Afterwards `SecurityConfig` was restored and `git diff` confirmed no production change.
+- No catch-all exception handler was added.
+
+**Verification:** `./mvnw spotless:check verify` (JDK 21 container, Testcontainers): BUILD SUCCESS, **48 tests**.
+`backend/README.md` was updated: the 500 body had been marked "not verified", and the test table now includes the new class.
+
+**Limitations:** the token is decoded by a mock, so the test does not cover real signature validation during error
+dispatch. Only one exception type was exercised, from one endpoint.

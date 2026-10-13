@@ -193,8 +193,15 @@ Malformed JSON gives 400 with the framework's default ProblemDetail (`"title": "
 **401** has no body (see Authentication).
 
 `ApiExceptionHandler` deliberately has no catch-all handler, so unexpected exceptions are not turned into 4xx
-responses. The exact body of an unexpected 500 has **not been verified** (Spring Boot's `/error` fallback runs
-behind the same security filter chain).
+responses. They reach the servlet container, which dispatches to Spring Boot's `/error` endpoint. That dispatch
+passes through the security filter chain again, and the authenticated request still gets **500**, not 401.
+The body is Boot's default error JSON with no exception message or stack trace:
+
+```json
+{ "timestamp": "…", "status": 500, "error": "Internal Server Error", "path": "/api/boats/…" }
+```
+
+This is covered by `UnexpectedErrorDispatchTest` (see below).
 
 ## Local development
 
@@ -231,6 +238,7 @@ docker run --rm -v "$PWD":/w -w /w \
 | `BoatServiceTest` | `@DataJpaTest` + `BoatService`, Testcontainers PostgreSQL | CRUD incl. trimming and unchanged `createdAt`, not found, pagination metadata, ordering incl. ties, search, literal `%`/`_` |
 | `BoatRepositoryTest` | `@DataJpaTest`, Testcontainers | Round trip, generated `id`/`createdAt`, `createdAt` unchanged on update, Bean Validation of `name` |
 | `BoatTableConstraintsTest` | `@DataJpaTest` with Bean Validation off, Testcontainers | PostgreSQL rejects a spaces-only name and a 151-character name |
+| `UnexpectedErrorDispatchTest` | `@SpringBootTest(RANDOM_PORT)`: real Tomcat and real filter chain; mocked `BoatService` and `JwtDecoder`; Testcontainers | An unexpected exception in an authenticated request returns 500 via `/error` (not 401) with no internals; no token returns 401 |
 | `MeControllerTest` | `@WebMvcTest` + real `SecurityConfig` | `/api/me` 401/200, unknown paths require authentication |
 | `TokenValidatorTest` | Plain unit test | Issuer and audience validator accepts and rejects real `Jwt` objects |
 
