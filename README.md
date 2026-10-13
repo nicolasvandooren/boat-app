@@ -57,10 +57,11 @@ cd backend && ./mvnw spotless:check verify
 cd frontend && npm run format:check && npm run lint && npm test && npm run build
 ```
 
-Without a local JDK 21, run the backend checks in a container:
+Persistence tests use Testcontainers (PostgreSQL), so Docker must be running. Without a local JDK 21,
+run the backend checks in a container (the Docker socket is mounted for Testcontainers):
 
 ```bash
-docker run --rm -v "$PWD/backend":/w -w /w maven:3.9.16-eclipse-temurin-21 ./mvnw spotless:check verify
+docker run --rm -v "$PWD/backend":/w -w /w -v /var/run/docker.sock:/var/run/docker.sock -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal maven:3.9.16-eclipse-temurin-21 ./mvnw spotless:check verify
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same checks and builds both Docker images.

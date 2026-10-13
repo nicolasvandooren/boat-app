@@ -57,8 +57,11 @@ A small boat management app built for a time-boxed technical challenge. Prioriti
 |---|---|
 | Full stack | `docker compose up --build` |
 | Backend format / test (JDK 21) | `cd backend && ./mvnw spotless:check verify` |
-| Backend without local JDK 21 | `docker run --rm -v "$PWD/backend":/w -w /w maven:3.9.16-eclipse-temurin-21 ./mvnw spotless:check verify` |
+| Backend without local JDK 21 | `docker run --rm -v "$PWD/backend":/w -w /w -v /var/run/docker.sock:/var/run/docker.sock -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal maven:3.9.16-eclipse-temurin-21 ./mvnw spotless:check verify` |
 | Frontend checks | `cd frontend && npm ci && npm run format:check && npm run lint && npm test && npm run build` |
+
+Persistence tests use Testcontainers (`postgres:17.9-alpine`, same image as compose), so Docker must be running.
+Tests that deliberately violate a DB constraint must end at the failing flush (PostgreSQL aborts the transaction).
 
 ## Definition of done / acceptance criteria
 
