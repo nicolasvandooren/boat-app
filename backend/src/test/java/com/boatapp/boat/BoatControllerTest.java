@@ -1,6 +1,11 @@
 package com.boatapp.boat;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.aMapWithSize;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -169,6 +174,47 @@ class BoatControllerTest {
                 .content("{\"name\":\"x\"}"))
         .andExpect(status().isUnauthorized());
     mvc.perform(delete("/api/boats/{id}", ID)).andExpect(status().isUnauthorized());
+    verifyNoInteractions(service);
+  }
+
+  @Test
+  void validationErrorsDoNotLeakSubmittedValuesOrInternals() throws Exception {
+    String secret = "S3CR3T-cc-4111111111111111";
+    String name = secret.repeat(10); // > 150 characters
+    String description = secret.repeat(100); // > 2000 characters
+
+    String body =
+        mvc.perform(
+                authenticated(post("/api/boats"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"name\":\"" + name + "\",\"description\":\"" + description + "\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.title").value("Validation failed"))
+            .andExpect(jsonPath("$.detail").value("One or more fields are invalid."))
+            .andExpect(jsonPath("$.instance").value("/api/boats"))
+            .andExpect(jsonPath("$.errors", hasSize(2)))
+            .andExpect(jsonPath("$.errors[*].field", containsInAnyOrder("name", "description")))
+            .andExpect(jsonPath("$.errors[0]", aMapWithSize(2)))
+            .andExpect(jsonPath("$.errors[1]", aMapWithSize(2)))
+            .andExpect(
+                jsonPath("$.errors[*].message", everyItem(startsWith("size must be between"))))
+            .andExpect(jsonPath("$.trace").doesNotExist())
+            .andExpect(jsonPath("$.exception").doesNotExist())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    assertThat(body)
+        .doesNotContain(secret)
+        .doesNotContainIgnoringCase("rejected")
+        .doesNotContain("BoatRequest", "Exception", "java.", "jakarta.", "org.springframework")
+        .doesNotContain("\tat ", "Caused by")
+        .doesNotContainIgnoringCase("sql")
+        .doesNotContainIgnoringCase("postgres")
+        .doesNotContainIgnoringCase("hibernate")
+        .doesNotContainIgnoringCase("jdbc");
     verifyNoInteractions(service);
   }
 
