@@ -3,7 +3,10 @@
 A small boat management application: Spring Boot 3.5 (Java 21) REST API, React + TypeScript SPA, PostgreSQL,
 and Keycloak for OIDC login (Authorization Code + PKCE).
 
-> Status: iteration 1. Infrastructure, authentication and CI are in place; boat management is not implemented yet.
+> Status: the backend REST API (boat CRUD, paginated listing and search) is complete. The frontend boat
+> management UI is not implemented yet.
+
+API reference, authentication details and backend development notes: [backend/README.md](backend/README.md).
 
 ## Quick start
 
