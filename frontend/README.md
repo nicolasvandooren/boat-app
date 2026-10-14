@@ -9,6 +9,7 @@ React 19 + TypeScript SPA built with Vite. It uses React Router, `react-oidc-con
 | ------------- | --------- | ---------------------------------------------------- |
 | `/`           | protected | Redirects to `/boats`                                |
 | `/boats`      | protected | Fleet overview: search and pagination                |
+| `/boats/:id`  | protected | Boat details                                         |
 | `/signed-out` | public    | Shown after logout. It never signs in automatically. |
 | anything else | protected | "Page not found"                                     |
 
@@ -19,7 +20,9 @@ the Keycloak session and returns to `/signed-out`.
 ## Fleet overview
 
 `/boats` calls `GET /api/boats?page&size=10&search` and shows each boat as a card with its name, description and
-creation date. Cards aren't links yet; the detail page comes in iteration 3A.3.
+creation date. The boat name in each card is a link to its detail page. The link's `::after` stretches over the
+card, so the whole card is clickable. There is one interactive element per card, with hover and focus styling on
+the card.
 
 | URL parameter | Meaning                                                                                        |
 | ------------- | ---------------------------------------------------------------------------------------------- |
@@ -39,6 +42,35 @@ creation date. Cards aren't links yet; the detail page comes in iteration 3A.3.
   - page past the end (with a link to the first page)
   - 401 ("Sign in again", no automatic redirect)
   - other errors (Retry; a 400 also shows the ProblemDetail `detail`)
+
+## Boat details
+
+`/boats/:id` calls `GET /api/boats/{id}` (`useBoat`/`fetchBoat`, query key `['boats', <subject>, 'detail', id]`)
+and shows the name as the page `h1`, the description (or "No description") and the creation date.
+
+- **Back to fleet:** the card link passes the list's query string as React Router location state
+  (`{ listSearch }`), and "Back to fleet" returns to `/boats<listSearch>`, so search and page are kept. The state
+  lives in the browser history entry, so it survives a refresh. A direct visit, or a new tab, falls back to
+  `/boats`.
+- **States:**
+  - loading
+  - "Boat not found" for a 404, and for an id that is not a UUID (no request is made)
+  - 401 ("Sign in again", no automatic redirect)
+  - network or 5xx ("Could not load this boat." with Retry)
+
+  Backend error details aren't shown, except for the 400 detail on the list.
+
+## Accessibility
+
+- Skip link, `header`/`main` landmarks, one `h1` per page, and a page-specific document title.
+- After client-side navigation to another page, focus moves to `<main>` and the page scrolls to the top.
+  Search and pagination keep focus where it is.
+- A visible 3 px teal focus ring. Status messages use `role="status"` and errors `role="alert"`.
+- Automated checks: `src/test/axe.ts` runs axe-core's WCAG 2.0–2.2 A/AA rules. It is used for the fleet (with
+  boats and empty) and the detail page (boat and not found). jsdom can't compute colour contrast, so contrast was
+  measured in the browser instead (lowest text contrast 5.1:1).
+
+  These checks don't prove WCAG compliance; a screen reader pass hasn't been done.
 
 ## Caching (nginx)
 
@@ -79,11 +111,13 @@ src/
   queryClient.ts      retries only network errors and 5xx
   api/client.ts       fetch wrapper: bearer token, AbortSignal, ProblemDetail title/detail in ApiError
   auth/               oidcConfig, RequireAuth (automatic login), SignedOutPage
-  components/         Layout (skip link, header, Log out)
-  features/boats/     types, api (useBoats, URL params), BoatsPage, BoatSearch
+  features/boats/     types, api (useBoats, useBoat/fetchBoat, URL params), BoatsPage, BoatSearch,
+                      BoatDetailPage, LoadError (shared session-expired / retry state)
+  components/         Layout (skip link, header, Log out, focus on navigation), useDocumentTitle
   pages/              NotFoundPage
   styles/             tokens.css (design tokens), global.css
   test/mockAuth.ts    useAuth / hasAuthParams test doubles
+  test/axe.ts         axe-core helper for accessibility checks in tests
 ```
 
 Tests mock `react-oidc-context` at the `useAuth`/`hasAuthParams` boundary, stub `fetch` with `vi.stubGlobal`,

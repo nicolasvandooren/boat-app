@@ -51,7 +51,9 @@ A small boat management app built for a time-boxed technical challenge. Prioriti
   `[feature, sub, ...]` (the subject at index 1). Logout calls `queryClient.clear()`. When the subject changes,
   `App.tsx` removes only queries of other subjects. Never `clear()` while the current user's queries are mounted:
   that strands them in a permanent loading state (seen when the session is restored on page load).
-- List state (page, search) lives in the URL; `page` is zero-based like the API.
+- List state (page, search) lives in the URL; `page` is zero-based like the API. The detail page gets the list's
+  query string as location state (`{ listSearch }`) for "Back to fleet", falling back to `/boats`. Don't add
+  global state for navigation context.
 - nginx: HTML is `Cache-Control: no-cache`, hashed `/assets/*` are immutable, and missing assets return 404.
   Keep this when changing `frontend/nginx.conf`.
 - Styling: CSS Modules per component plus the global tokens. No UI framework. Text colors must keep ≥ 4.5:1 contrast.
@@ -76,7 +78,10 @@ A small boat management app built for a time-boxed technical challenge. Prioriti
 ### Accessibility (target WCAG 2.2 AA)
 - Semantic landmarks (`header`, `main`), one `h1` per page, a skip link, a visible `:focus-visible` ring.
 - Status messages use `role="status"` and errors use `role="alert"`. Every control has an accessible name. No unnecessary ARIA.
-- Automated checks (lint and axe in tests) do not prove compliance. Keyboard and contrast need manual checks.
+- Each page sets a document title (`useDocumentTitle`). After client-side navigation, `Layout` moves focus to `<main>`.
+- Card pattern: one link (the title) per card, stretched with `::after`; no nested interactive elements.
+- Use `axeViolations()` from `src/test/axe.ts` for representative states of new pages. Automated checks (lint
+  and axe) do not prove compliance; keyboard, contrast and screen reader behavior need manual checks.
 
 ### General
 - Pin exact versions: Docker image tags, npm deps (`save-exact`), Maven plugins.
