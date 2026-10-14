@@ -7,7 +7,15 @@ type AuthState = ReturnType<typeof useAuth>
 export const signinRedirect = vi.fn(() => Promise.resolve())
 export const signoutRedirect = vi.fn(() => Promise.resolve())
 
-export const demoUser = { profile: { sub: 'user-1', preferred_username: 'demo' } }
+interface TestUser {
+  access_token?: string
+  profile: { sub: string; preferred_username: string }
+}
+
+export const demoUser: TestUser = {
+  access_token: 'test-access-token',
+  profile: { sub: 'user-1', preferred_username: 'demo' },
+}
 
 export function mockAuth(state: Partial<AuthState> = {}, callbackParamsInUrl = false) {
   vi.mocked(hasAuthParams).mockReturnValue(callbackParamsInUrl)
@@ -23,8 +31,6 @@ export function mockAuth(state: Partial<AuthState> = {}, callbackParamsInUrl = f
   } as AuthState)
 }
 
-export function mockSignedIn(
-  user: { profile: { sub: string; preferred_username: string } } = demoUser,
-) {
+export function mockSignedIn(user: TestUser = demoUser) {
   mockAuth({ isAuthenticated: true, user: user as AuthState['user'] })
 }

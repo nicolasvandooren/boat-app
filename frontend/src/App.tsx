@@ -5,7 +5,7 @@ import { Navigate, Route, Routes } from 'react-router'
 import { RequireAuth } from './auth/RequireAuth'
 import { SignedOutPage } from './auth/SignedOutPage'
 import { Layout } from './components/Layout'
-import { BoatsPage } from './pages/BoatsPage'
+import { BoatsPage } from './features/boats/BoatsPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 
 /** Drops cached server data whenever the signed-in identity changes or the session ends. */

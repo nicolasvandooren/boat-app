@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { mockAuth, mockSignedIn, signinRedirect, signoutRedirect } from './test/mockAuth'
 
@@ -27,8 +27,20 @@ function renderApp(path: string, queryClient = new QueryClient()) {
   }
 }
 
+const emptyFleet = { content: [], page: 0, size: 10, totalElements: 0, totalPages: 0 }
+
 describe('App routing', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(Response.json(emptyFleet))),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
 
   it('sends an authenticated visitor from / to the fleet overview', () => {
     mockSignedIn()
