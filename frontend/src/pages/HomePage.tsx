@@ -14,7 +14,7 @@ export function HomePage() {
   const [apiError, setApiError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!accessToken) return
+    if (!accessToken) return undefined
     let cancelled = false
     apiGet<Me>('/api/me', accessToken)
       .then((result) => {
