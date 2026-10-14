@@ -97,6 +97,25 @@ and shows the name as the page `h1`, the description (or "No description") and t
   - From the edit page it returns to the boat.
   - The list context travels as location state (`navigation.ts`).
 
+## Delete
+
+"Delete boat" on the detail page opens an **inline confirmation**, "Delete “<name>”?". It deliberately isn't
+`window.confirm()`, which blocks the page and can't be tested in jsdom.
+
+- **Opening and closing:** the panel gets focus when it opens, so screen readers read the question and the
+  "cannot be undone" description. **Cancel** or **Escape** closes it without any request and returns focus to
+  "Delete boat".
+- **While deleting:** "Delete permanently" and Cancel are disabled, the button reads "Deleting…", and repeat
+  clicks are ignored.
+- **After deleting** (`DELETE /api/boats/{id}`, 204), the app returns, replacing the detail page in history, to
+  the fleet URL the user came from. A focused status message confirms "“<name>” was deleted.". The detail
+  query of the signed-in subject is removed, and that subject's lists are invalidated. Other identities' cache
+  entries are never touched.
+- **Errors:**
+  - 401 offers "Sign in again" (no automatic redirect).
+  - 404 says the boat was already deleted, links to the fleet, and invalidates the lists.
+  - Network errors and 5xx keep the confirmation open so the user can try again.
+
 ## Accessibility
 
 - Skip link, `header`/`main` landmarks, one `h1` per page, and a page-specific document title.
@@ -148,9 +167,9 @@ src/
   queryClient.ts      retries only network errors and 5xx
   api/client.ts       fetch wrapper: bearer token, AbortSignal, ProblemDetail title/detail in ApiError
   auth/               oidcConfig, RequireAuth (automatic login), SignedOutPage
-  features/boats/     types, api (queries and create/update mutations), boatInput (body + validation),
+  features/boats/     types, api (queries; create/update/delete mutations), boatInput (body + validation),
                       navigation (list context in location state), BoatsPage, BoatSearch,
-                      BoatDetailPage, BoatForm, NewBoatPage, EditBoatPage, LoadError
+                      BoatDetailPage, DeleteBoat, BoatForm, NewBoatPage, EditBoatPage, LoadError
   components/         Layout (skip link, header, Log out, focus on navigation), useDocumentTitle
   pages/              NotFoundPage
   styles/             tokens.css (design tokens), global.css

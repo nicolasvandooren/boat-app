@@ -80,3 +80,58 @@
   outline: var(--focus-ring);
   outline-offset: 2px;
 }
+
+.dangerZone {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.danger {
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+  color: var(--color-on-dark);
+}
+
+.danger:hover {
+  background: #8f1c13;
+}
+
+.secondaryButton {
+  border-color: var(--color-navy-700);
+  background: var(--color-surface);
+  color: var(--color-navy-700);
+}
+
+.secondaryButton:hover {
+  background: var(--color-teal-100);
+}
+
+.confirm {
+  padding: var(--space-4);
+  border: 1px solid var(--color-danger);
+  border-left-width: 4px;
+  border-radius: var(--radius-sm);
+  background: #fdf3f2;
+}
+
+.confirm h2 {
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-lg);
+  overflow-wrap: anywhere;
+}
+
+.confirm:focus {
+  outline: none;
+}
+
+.confirm:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.confirmActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}

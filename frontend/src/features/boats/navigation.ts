@@ -6,11 +6,13 @@
 export interface BoatNavState {
   /** The fleet URL's query string, e.g. "?search=pearl&page=1" (or "" for the first page). */
   listSearch?: string
-  /** Set after a successful save; the detail page confirms it. */
+  /** Set after a successful save or delete; the next page confirms it. */
   notice?: BoatNotice
+  /** Name of the boat that was just deleted, for the fleet's confirmation. */
+  deletedName?: string
 }
 
-export type BoatNotice = 'created' | 'saved'
+export type BoatNotice = 'created' | 'saved' | 'deleted'
 
 function field(state: unknown, key: keyof BoatNavState): unknown {
   return typeof state === 'object' && state !== null && key in state
@@ -30,5 +32,10 @@ export function backToFleet(state: unknown): string {
 
 export function noticeFrom(state: unknown): BoatNotice | undefined {
   const notice = field(state, 'notice')
-  return notice === 'created' || notice === 'saved' ? notice : undefined
+  return notice === 'created' || notice === 'saved' || notice === 'deleted' ? notice : undefined
+}
+
+export function deletedNameFrom(state: unknown): string | undefined {
+  const name = field(state, 'deletedName')
+  return typeof name === 'string' && name !== '' ? name : undefined
 }

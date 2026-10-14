@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, apiGet, apiSend } from './client'
+import { ApiError, apiDelete, apiGet, apiSend } from './client'
 
 const fetchMock = vi.fn<typeof fetch>()
 vi.stubGlobal('fetch', fetchMock)
@@ -104,5 +104,22 @@ describe('apiGet', () => {
       { field: 'name', message: 'must not be blank' },
       { field: 'other', message: 'is wrong' },
     ])
+  })
+
+  it('deletes with the bearer token and accepts an empty 204 response', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }))
+    await expect(apiDelete('/api/boats/b1', 'token-1')).resolves.toBeUndefined()
+
+    const [url, init] = fetchMock.mock.calls[0] ?? []
+    expect(url).toBe('/api/boats/b1')
+    expect(init?.method).toBe('DELETE')
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer token-1')
+  })
+
+  it('reports a failed delete with its ProblemDetail', async () => {
+    respond(404, { title: 'Boat not found', status: 404 }, 'application/problem+json')
+    const error = await failure(apiDelete('/api/boats/b1', 't'))
+    expect(error.status).toBe(404)
+    expect(error.title).toBe('Boat not found')
   })
 })

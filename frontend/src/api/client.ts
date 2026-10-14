@@ -78,3 +78,14 @@ export function apiSend<T>(
     body: JSON.stringify(body),
   })
 }
+
+/** Sends DELETE. The API answers 204 with an empty body, so there is nothing to parse. */
+export async function apiDelete(path: string, accessToken: string): Promise<void> {
+  const response = await fetch(path, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+  })
+  if (!response.ok) {
+    throw new ApiError(response.status, await readProblem(response))
+  }
+}
