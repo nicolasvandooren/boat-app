@@ -114,6 +114,13 @@ describe('BoatsPage', () => {
     expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer test-access-token')
   })
 
+  it('summarizes search results with correct grammar', async () => {
+    serveBoats((_page, search) => json(pageOf(search === 'one' ? [boat(1)] : [boat(1), boat(2)])))
+    renderPage('/boats?search=one')
+    await screen.findByText('Boat 1')
+    expect(screen.getByRole('status')).toHaveTextContent('1 boat matches “one”')
+  })
+
   it('caches the list under the signed-in subject', async () => {
     serveBoats(() => json(pageOf([boat(1)])))
     const { queryClient } = renderPage('/boats?page=0&search=pearl')

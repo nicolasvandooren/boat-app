@@ -76,7 +76,8 @@ function summary(data: BoatPage | undefined, isPending: boolean, search: string)
   if (isPending) return 'Loading boats…'
   if (!data) return ''
   const count = countLabel(data.totalElements)
-  return search ? `${count} match “${search}”` : count
+  if (!search) return count
+  return `${count} ${data.totalElements === 1 ? 'matches' : 'match'} “${search}”`
 }
 
 export function BoatsPage() {
