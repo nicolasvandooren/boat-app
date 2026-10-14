@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -171,6 +171,28 @@ describe('BoatDetailPage', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Black Pearl' }),
     ).toBeInTheDocument()
+  })
+
+  it('keeps showing the boat when a background refetch fails, and reports it', async () => {
+    let status = 200
+    serve(() => (status === 200 ? json(pearl) : json({ title: 'Boat not found', status }, status)))
+    const { queryClient, user } = renderAt(detailUrl)
+    await screen.findByRole('heading', { level: 1, name: 'Black Pearl' })
+
+    // E.g. a refetch on window focus after the boat was deleted elsewhere.
+    status = 404
+    await act(() => queryClient.refetchQueries({ queryKey: ['boats', 'user-1', 'detail'] }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not refresh this boat; the last loaded version is shown. It may have been deleted.',
+    )
+    expect(screen.getByRole('heading', { level: 1, name: 'Black Pearl' })).toBeInTheDocument()
+
+    status = 200
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
   })
 
   it('does not call the API before authentication is confirmed', () => {

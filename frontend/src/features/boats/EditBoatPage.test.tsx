@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { axeViolations } from '../../test/axe'
 import {
@@ -10,7 +10,7 @@ import {
   serveApi,
   testQueryClient,
 } from '../../test/boatRoutes'
-import { mockSignedIn } from '../../test/mockAuth'
+import { mockSignedIn, signinRedirect } from '../../test/mockAuth'
 import type { Boat } from './types'
 
 vi.mock('react-oidc-context', () => ({ useAuth: vi.fn(), hasAuthParams: vi.fn() }))
@@ -94,6 +94,64 @@ describe('EditBoatPage', () => {
     const { user } = renderBoatRoutes(editUrl)
     await user.click(await screen.findByRole('button', { name: 'Save changes' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('This boat no longer exists.')
+  })
+
+  it('keeps unsaved input when a background refetch fails, and saves after recovery', async () => {
+    let detailStatus = 200
+    let put: unknown
+    serveApi(({ method, body }) => {
+      if (method === 'PUT') {
+        put = body
+        return json({ ...pearl, name: 'Pearl II', description: 'Refitted' })
+      }
+      return detailStatus === 200 ? json(pearl) : json({ status: detailStatus }, detailStatus)
+    })
+    const queryClient = testQueryClient()
+    const { container, user } = renderBoatRoutes(editUrl, queryClient)
+
+    await user.clear(await screen.findByRole('textbox', { name: 'Name' }))
+    await user.type(nameField(), 'Pearl II')
+    await user.clear(descriptionField())
+    await user.type(descriptionField(), 'Refitted')
+
+    // E.g. a refetch on window focus while the backend is down.
+    detailStatus = 500
+    await act(() => queryClient.refetchQueries({ queryKey: ['boats', 'user-1', 'detail'] }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not refresh this boat; the last loaded version is shown.',
+    )
+    expect(nameField()).toHaveValue('Pearl II')
+    expect(descriptionField()).toHaveValue('Refitted')
+    expect(await axeViolations(container)).toEqual([])
+
+    detailStatus = 200
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+    expect(nameField()).toHaveValue('Pearl II')
+    expect(descriptionField()).toHaveValue('Refitted')
+
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    expect(await screen.findByText('Changes saved.')).toBeInTheDocument()
+    expect(put).toEqual({ name: 'Pearl II', description: 'Refitted' })
+  })
+
+  it('keeps unsaved input when a background refetch gets a 401, and offers to sign in again', async () => {
+    let detailStatus = 200
+    serveApi(() => (detailStatus === 200 ? json(pearl) : json({ status: 401 }, 401)))
+    const queryClient = testQueryClient()
+    const { user } = renderBoatRoutes(editUrl, queryClient)
+
+    await user.type(await screen.findByRole('textbox', { name: 'Name' }), ' II')
+    detailStatus = 401
+    await act(() => queryClient.refetchQueries({ queryKey: ['boats', 'user-1', 'detail'] }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your session has expired.')
+    expect(screen.getByRole('button', { name: 'Sign in again' })).toBeInTheDocument()
+    expect(nameField()).toHaveValue('Black Pearl II')
+    expect(signinRedirect).not.toHaveBeenCalled()
   })
 
   it('shows "Boat not found" with a way back for an unknown or malformed id', async () => {

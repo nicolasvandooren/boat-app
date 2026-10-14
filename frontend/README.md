@@ -59,6 +59,9 @@ and shows the name as the page `h1`, the description (or "No description") and t
   - "Boat not found" for a 404, and for an id that is not a UUID (no request is made)
   - 401 ("Sign in again", no automatic redirect)
   - network or 5xx ("Could not load this boat." with Retry)
+  - a failed background refetch (e.g. on window focus) keeps the loaded boat on screen and adds an alert
+    above it: "Could not refresh this boat; the last loaded version is shown." with Retry ("It may have been
+    deleted." for a 404; "Sign in again" for a 401)
 
   Backend error details aren't shown, except for the 400 detail on the list.
 
@@ -81,6 +84,9 @@ and shows the name as the page `h1`, the description (or "No description") and t
   - Focus moves to the first invalid field.
   - While saving, the fields and the button are disabled and a second submit is ignored. A failed save keeps
     the input.
+  - Once the boat is loaded, the edit form stays mounted even if a background refetch of the boat fails (for
+    example on window focus while the backend is down or the token has just expired). The failure appears as
+    an alert above the form, with Retry or "Sign in again", and unsaved input is kept.
 - **Server errors:**
   - ProblemDetail errors for `name`/`description` appear inline.
   - Unknown fields, and a 400 without usable errors, appear in a focused form-level alert with a fallback

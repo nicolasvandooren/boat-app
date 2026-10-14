@@ -35,28 +35,22 @@ const NOTICES: Partial<Record<BoatNotice, string>> = {
 function BoatDetail({ id, navState }: { id: string; navState: BoatNavState }) {
   const { data: boat, error, refetch } = useBoat(id)
   useDocumentTitle(boat?.name ?? 'Boat details')
-
-  if (error) {
-    if (error instanceof ApiError && (error.status === 404 || error.status === 400)) {
-      return <BoatNotFound />
-    }
-    return (
-      <LoadError
-        what="this boat"
-        error={error}
-        onRetry={() => {
-          void refetch()
-        }}
-      />
-    )
+  const retry = () => {
+    void refetch()
   }
 
   if (!boat) {
-    return <p role="status">Loading boat…</p>
+    if (!error) return <p role="status">Loading boat…</p>
+    if (error instanceof ApiError && (error.status === 404 || error.status === 400)) {
+      return <BoatNotFound />
+    }
+    return <LoadError what="this boat" error={error} onRetry={retry} />
   }
 
   return (
     <>
+      {/* A failed background refetch keeps the cached boat on screen and reports the failure. */}
+      {error && <LoadError what="this boat" error={error} onRetry={retry} stale />}
       {navState.notice && NOTICES[navState.notice] && (
         // Focused after navigation (see Layout), so the confirmation is read out first.
         <p role="status" className={styles.notice} tabIndex={-1} data-focus-on-navigate>
