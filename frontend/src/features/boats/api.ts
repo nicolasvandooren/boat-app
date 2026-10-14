@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from 'react-oidc-context'
-import { apiGet } from '../../api/client'
+import { apiGet, apiSend } from '../../api/client'
+import type { BoatInput } from './boatInput'
 import type { Boat, BoatPage } from './types'
 
 export const PAGE_SIZE = 10
@@ -70,4 +71,38 @@ export function useBoats({ page, search }: BoatListParams) {
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[3]?.search === search ? previous : undefined,
   })
+}
+
+/**
+ * Shared success handling for create and update: store the saved boat returned by the server under its detail
+ * key, and mark every cached list page and search of this user stale so it refetches. No optimistic updates.
+ */
+function useBoatMutation(send: (input: BoatInput, accessToken: string) => Promise<Boat>) {
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+  const accessToken = user?.access_token
+  const subject = user?.profile.sub
+
+  return useMutation({
+    mutationFn: (input: BoatInput) => {
+      if (!accessToken) throw new Error('Not signed in')
+      return send(input, accessToken)
+    },
+    onSuccess: async (boat) => {
+      queryClient.setQueryData(['boats', subject, 'detail', boat.id], boat)
+      await queryClient.invalidateQueries({ queryKey: ['boats', subject, 'list'] })
+    },
+  })
+}
+
+export function useCreateBoat() {
+  return useBoatMutation((input, accessToken) =>
+    apiSend<Boat>('POST', '/api/boats', accessToken, input),
+  )
+}
+
+export function useUpdateBoat(id: string) {
+  return useBoatMutation((input, accessToken) =>
+    apiSend<Boat>('PUT', `/api/boats/${encodeURIComponent(id)}`, accessToken, input),
+  )
 }
