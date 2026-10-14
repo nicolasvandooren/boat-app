@@ -5,13 +5,15 @@ React 19 + TypeScript SPA built with Vite. It uses React Router, `react-oidc-con
 
 ## Routes
 
-| Path          | Access    | Purpose                                              |
-| ------------- | --------- | ---------------------------------------------------- |
-| `/`           | protected | Redirects to `/boats`                                |
-| `/boats`      | protected | Fleet overview: search and pagination                |
-| `/boats/:id`  | protected | Boat details                                         |
-| `/signed-out` | public    | Shown after logout. It never signs in automatically. |
-| anything else | protected | "Page not found"                                     |
+| Path              | Access    | Purpose                                              |
+| ----------------- | --------- | ---------------------------------------------------- |
+| `/`               | protected | Redirects to `/boats`                                |
+| `/boats`          | protected | Fleet overview: search and pagination                |
+| `/boats/new`      | protected | Add a boat                                           |
+| `/boats/:id`      | protected | Boat details                                         |
+| `/boats/:id/edit` | protected | Edit a boat                                          |
+| `/signed-out`     | public    | Shown after logout. It never signs in automatically. |
+| anything else     | protected | "Page not found"                                     |
 
 Opening a protected route without a session redirects to Keycloak. After login the app always lands on
 `/boats`: the callback returns to `/`, and the deep link is not restored. Logout clears the query cache, ends
@@ -59,6 +61,41 @@ and shows the name as the page `h1`, the description (or "No description") and t
   - network or 5xx ("Could not load this boat." with Retry)
 
   Backend error details aren't shown, except for the 400 detail on the list.
+
+## Create and edit
+
+"Add boat" (on the fleet, including the empty state) opens `/boats/new`; "Edit boat" on the detail page opens
+`/boats/:id/edit`. Both use `BoatForm`.
+
+- **What is sent** (`boatInput.ts`):
+  - The name is trimmed, as the server does.
+  - Only an empty description (`''`) is sent as `null`. Anything else, including whitespace-only text and line
+    breaks, is sent exactly as entered.
+  - Client validation checks that same body against the backend rules: a non-blank name of at most 150
+    characters, a description of at most 2000, and no NUL characters. Lengths are counted in UTF-16 code units,
+    as by the server.
+- **The form:**
+  - `noValidate`, so no browser bubbles.
+  - Each field has a visible label, a hint and a counter, plus an inline error linked with `aria-invalid` and
+    `aria-describedby`.
+  - Focus moves to the first invalid field.
+  - While saving, the fields and the button are disabled and a second submit is ignored. A failed save keeps
+    the input.
+- **Server errors:**
+  - ProblemDetail errors for `name`/`description` appear inline.
+  - Unknown fields, and a 400 without usable errors, appear in a focused form-level alert with a fallback
+    message.
+  - 401 offers "Sign in again" (no automatic redirect; unsaved input is lost).
+  - 404 (deleted meanwhile) explains it and links to the fleet.
+  - Network errors and 5xx ask the user to try again.
+- **After saving**, the app goes to the boat's detail page, replacing the form in history. A focused status
+  message confirms "Boat added." or "Changes saved.".
+- **Cache:** the mutation stores the server's response under the detail key and invalidates every list query of
+  the user (all pages and searches). There are no optimistic updates.
+- **Cancel:**
+  - From the add page it returns to the fleet page and search the user came from, or `/boats` on a direct visit.
+  - From the edit page it returns to the boat.
+  - The list context travels as location state (`navigation.ts`).
 
 ## Accessibility
 
@@ -111,13 +148,15 @@ src/
   queryClient.ts      retries only network errors and 5xx
   api/client.ts       fetch wrapper: bearer token, AbortSignal, ProblemDetail title/detail in ApiError
   auth/               oidcConfig, RequireAuth (automatic login), SignedOutPage
-  features/boats/     types, api (useBoats, useBoat/fetchBoat, URL params), BoatsPage, BoatSearch,
-                      BoatDetailPage, LoadError (shared session-expired / retry state)
+  features/boats/     types, api (queries and create/update mutations), boatInput (body + validation),
+                      navigation (list context in location state), BoatsPage, BoatSearch,
+                      BoatDetailPage, BoatForm, NewBoatPage, EditBoatPage, LoadError
   components/         Layout (skip link, header, Log out, focus on navigation), useDocumentTitle
   pages/              NotFoundPage
   styles/             tokens.css (design tokens), global.css
   test/mockAuth.ts    useAuth / hasAuthParams test doubles
   test/axe.ts         axe-core helper for accessibility checks in tests
+  test/boatRoutes.tsx renders the boat routes with the app's query client; fetch helpers
 ```
 
 Tests mock `react-oidc-context` at the `useAuth`/`hasAuthParams` boundary, stub `fetch` with `vi.stubGlobal`,
