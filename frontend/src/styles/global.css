@@ -57,6 +57,40 @@ button:hover {
   outline-offset: 2px;
 }
 
+/* Links that look like buttons: navigation (Add boat, Edit boat, Cancel) stays a real link. */
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-navy-700);
+  border-radius: var(--radius-sm);
+  background: var(--color-navy-700);
+  color: var(--color-on-dark);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.button-link:hover {
+  background: var(--color-navy-900);
+}
+
+.button-link.secondary {
+  background: var(--color-surface);
+  color: var(--color-navy-700);
+}
+
+.button-link.secondary:hover {
+  background: var(--color-teal-100);
+}
+
+button:disabled {
+  border-color: var(--color-navy-500);
+  background: var(--color-navy-500);
+  cursor: not-allowed;
+}
+
 [role='alert'] {
   color: var(--color-danger);
 }

@@ -11,6 +11,13 @@
   margin: 0;
 }
 
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
 .search {
   display: grid;
   gap: var(--space-1);

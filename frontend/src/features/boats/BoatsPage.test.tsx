@@ -135,6 +135,10 @@ describe('BoatsPage', () => {
     renderPage()
     expect(await screen.findByText(/Your fleet is empty/)).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('0 boats')
+    expect(screen.getByRole('link', { name: 'Add your first boat' })).toHaveAttribute(
+      'href',
+      '/boats/new',
+    )
   })
 
   it('shows an empty search result and clears the search', async () => {

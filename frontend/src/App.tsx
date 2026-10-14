@@ -7,6 +7,8 @@ import { SignedOutPage } from './auth/SignedOutPage'
 import { Layout } from './components/Layout'
 import { BoatDetailPage } from './features/boats/BoatDetailPage'
 import { BoatsPage } from './features/boats/BoatsPage'
+import { EditBoatPage } from './features/boats/EditBoatPage'
+import { NewBoatPage } from './features/boats/NewBoatPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 
 /**
@@ -33,7 +35,9 @@ export default function App() {
         <Route element={<RequireAuth />}>
           <Route index element={<Navigate to="/boats" replace />} />
           <Route path="boats" element={<BoatsPage />} />
+          <Route path="boats/new" element={<NewBoatPage />} />
           <Route path="boats/:id" element={<BoatDetailPage />} />
+          <Route path="boats/:id/edit" element={<EditBoatPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>
