@@ -1,0 +1,50 @@
+.back {
+  margin-bottom: var(--space-6);
+}
+
+/* inline-flex drops the space after the arrow, so the gap provides it. */
+.back a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 2.5rem;
+  font-weight: 600;
+}
+
+.detail {
+  max-width: 48rem;
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--color-teal-700);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.name {
+  overflow-wrap: anywhere;
+}
+
+.fields {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.fields dt {
+  color: var(--color-navy-500);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fields dd {
+  margin: var(--space-1) 0 0;
+}
+
+/* Keep the author's line breaks; long words must not overflow on phones. */
+.description {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}

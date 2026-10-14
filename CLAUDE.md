@@ -44,6 +44,44 @@ A small boat management app built for a time-boxed technical challenge. Prioriti
 - Every data-fetching view handles loading, error and empty states explicitly.
 - API calls go through `src/api/client.ts` with the bearer token; relative `/api/...` URLs only.
 - Prettier (no semicolons, single quotes, width 100) and ESLint must pass.
+- Structure: `src/App.tsx` (routes), `src/auth/` (OIDC config, `RequireAuth`, `SignedOutPage`),
+  `src/components/` (shared UI such as `Layout`), `src/styles/` (`tokens.css` design tokens, `global.css`).
+  Boat UI goes in `src/features/boats/`. Extract a component only when it is reused or clearly separates concerns.
+- Server state lives in TanStack Query, never copied into component state. Query keys for user data are
+  `[feature, sub, ...]` (the subject at index 1). Logout calls `queryClient.clear()`. When the subject changes,
+  `App.tsx` removes only queries of other subjects. Never `clear()` while the current user's queries are mounted:
+  that strands them in a permanent loading state (seen when the session is restored on page load).
+- List state (page, search) lives in the URL; `page` is zero-based like the API. The detail page gets the list's
+  query string as location state (`{ listSearch }`) for "Back to fleet", falling back to `/boats`. Don't add
+  global state for navigation context.
+- nginx: HTML is `Cache-Control: no-cache`, hashed `/assets/*` are immutable, and missing assets return 404.
+  Keep this when changing `frontend/nginx.conf`.
+- Styling: CSS Modules per component plus the global tokens. No UI framework. Text colors must keep ≥ 4.5:1 contrast.
+
+### Authentication flow (frontend, do not break)
+- The `oidcConfig.ts` callback (`history.replaceState`, which removes `code`/`state`) and the sessionStorage user
+  store stay as they are. `BrowserRouter` stays. Login always returns to `/` → `/boats`, with no deep-link restore.
+- Protected routes sit under `RequireAuth`. It never redirects while callback params are present
+  (`hasAuthParams()`), while loading, or on `auth.error`, and it redirects at most once per mount
+  (a ref guard, so StrictMode is safe).
+- `/signed-out` is public and must never sign in automatically. Keycloak's post-logout redirect points to it.
+- An API 401 must not trigger an automatic redirect. Offer a user-initiated "Sign in again" instead.
+
+### Lint
+- ESLint 10 flat config. The official `eslint-config-airbnb` (ESLint ≤ 8), `eslint-config-airbnb-extended`
+  (ESLint 9) and `eslint-plugin-jsx-a11y` (ESLint ≤ 9) are incompatible, so the setup is: typescript-eslint
+  `strictTypeChecked`, react-hooks, `eslint-plugin-jsx-a11y-x` (verified to report missing `alt` and
+  non-interactive click handlers), and the essential non-formatting Airbnb rules listed in `eslint.config.js`.
+- Do not downgrade ESLint or force peer dependencies. Do not disable rules broadly; fix the code or justify a
+  narrow exception.
+
+### Accessibility (target WCAG 2.2 AA)
+- Semantic landmarks (`header`, `main`), one `h1` per page, a skip link, a visible `:focus-visible` ring.
+- Status messages use `role="status"` and errors use `role="alert"`. Every control has an accessible name. No unnecessary ARIA.
+- Each page sets a document title (`useDocumentTitle`). After client-side navigation, `Layout` moves focus to `<main>`.
+- Card pattern: one link (the title) per card, stretched with `::after`; no nested interactive elements.
+- Use `axeViolations()` from `src/test/axe.ts` for representative states of new pages. Automated checks (lint
+  and axe) do not prove compliance; keyboard, contrast and screen reader behavior need manual checks.
 
 ### General
 - Pin exact versions: Docker image tags, npm deps (`save-exact`), Maven plugins.

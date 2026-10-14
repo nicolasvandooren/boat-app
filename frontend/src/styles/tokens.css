@@ -1,0 +1,34 @@
+/* Nautical Premium design tokens. Text colors meet WCAG AA (>= 4.5:1) on --color-surface and --color-bg. */
+:root {
+  --color-navy-900: #0b2545; /* primary text, header */
+  --color-navy-700: #13315c; /* primary buttons */
+  --color-navy-500: #3d5a80; /* secondary text */
+  --color-teal-700: #0f766e; /* links, focus ring */
+  --color-teal-100: #d5f2ee; /* subtle accents only, never text on white */
+  --color-surface: #ffffff;
+  --color-bg: #f6f8fb;
+  --color-border: #dbe2ea;
+  --color-danger: #b42318;
+  --color-on-dark: #ffffff;
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.75rem;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --shadow-sm: 0 1px 2px rgb(11 37 69 / 6%), 0 2px 8px rgb(11 37 69 / 6%);
+
+  --content-width: 72rem;
+  --gutter: 1rem;
+  --focus-ring: 3px solid var(--color-teal-700);
+}

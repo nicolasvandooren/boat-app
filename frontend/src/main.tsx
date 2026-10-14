@@ -1,17 +1,27 @@
+import { QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { AuthProvider } from 'react-oidc-context'
 import { BrowserRouter } from 'react-router'
 import App from './App'
 import { oidcConfig } from './auth/oidcConfig'
-import './index.css'
+import { createQueryClient } from './queryClient'
+import './styles/tokens.css'
+import './styles/global.css'
 
-createRoot(document.getElementById('root')!).render(
+const root = document.getElementById('root')
+if (!root) throw new Error('Missing #root element')
+
+const queryClient = createQueryClient()
+
+createRoot(root).render(
   <StrictMode>
     <AuthProvider {...oidcConfig}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </QueryClientProvider>
     </AuthProvider>
   </StrictMode>,
 )
