@@ -34,6 +34,38 @@ class TokenValidatorTest {
     assertThat(validator.validate(token(ISSUER, List.of("account"))).hasErrors()).isTrue();
   }
 
+  // The default JwtTimestampValidator allows 60 seconds of clock skew; 120 seconds is beyond it.
+
+  @Test
+  void rejectsExpiredToken() {
+    Instant now = Instant.now();
+    Jwt expired =
+        validToken().issuedAt(now.minusSeconds(600)).expiresAt(now.minusSeconds(120)).build();
+
+    assertThat(validator.validate(expired).hasErrors()).isTrue();
+  }
+
+  @Test
+  void rejectsTokenThatIsNotYetValid() {
+    Instant now = Instant.now();
+    Jwt notYetValid =
+        validToken()
+            .issuedAt(now)
+            .notBefore(now.plusSeconds(120))
+            .expiresAt(now.plusSeconds(600))
+            .build();
+
+    assertThat(validator.validate(notYetValid).hasErrors()).isTrue();
+  }
+
+  private static Jwt.Builder validToken() {
+    return Jwt.withTokenValue("token")
+        .header("alg", "RS256")
+        .issuer(ISSUER)
+        .audience(List.of("boat-api"))
+        .subject("user-1");
+  }
+
   private static Jwt token(String issuer, List<String> audience) {
     Instant now = Instant.now();
     return Jwt.withTokenValue("token")

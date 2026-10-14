@@ -249,7 +249,13 @@ class BoatControllerTest {
   }
 
   @ParameterizedTest
-  @CsvSource({"page=-1, page", "size=0, size", "size=-5, size", "size=101, size"})
+  @CsvSource({
+    "page=-1, page",
+    "page=21474837, page",
+    "size=0, size",
+    "size=-5, size",
+    "size=101, size"
+  })
   void listRejectsOutOfRangeParametersWith400(String query, String field) throws Exception {
     mvc.perform(authenticated(get("/api/boats?" + query)))
         .andExpect(status().isBadRequest())
@@ -305,6 +311,54 @@ class BoatControllerTest {
     // detail or the errors.
     assertThat(body.replace("\"instance\":\"/api/boats/not-a-uuid\"", ""))
         .doesNotContain("not-a-uuid", "Failed to convert", "UUID", "Exception", "java.");
+    verifyNoInteractions(service);
+  }
+
+  @Test
+  void listAcceptsTheMaximumPage() throws Exception {
+    given(service.list(21474836, 100, null))
+        .willReturn(new BoatPageResponse(List.of(), 21474836, 100, 0, 0));
+
+    mvc.perform(authenticated(get("/api/boats?page=21474836&size=100"))).andExpect(status().isOk());
+    verify(service).list(21474836, 100, null);
+  }
+
+  @ParameterizedTest
+  @CsvSource(
+      delimiter = '|',
+      value = {
+        "{\"name\":\"a\\u0000b\"}|name",
+        "{\"name\":\"ok\",\"description\":\"x\\u0000y\"}|description"
+      })
+  void nulCharactersInBodyReturn400WithoutDatabaseDetails(String json, String field)
+      throws Exception {
+    String body =
+        mvc.perform(
+                authenticated(post("/api/boats"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(json))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.title").value("Validation failed"))
+            .andExpect(jsonPath("$.errors", hasSize(1)))
+            .andExpect(jsonPath("$.errors[0].field").value(field))
+            .andExpect(jsonPath("$.errors[0].message").value("must not contain NUL characters"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    assertThat(body).doesNotContainIgnoringCase("sql").doesNotContain("0x00", "UTF8", "Exception");
+    verifyNoInteractions(service);
+  }
+
+  @Test
+  void nulCharacterInSearchReturns400() throws Exception {
+    // .param(), not the URL template: the template would encode "%00" to a literal "%2500".
+    mvc.perform(authenticated(get("/api/boats").param("search", "a\u0000b")))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.title").value("Validation failed"))
+        .andExpect(jsonPath("$.errors[0].field").value("search"))
+        .andExpect(jsonPath("$.errors[0].message").value("must not contain NUL characters"));
     verifyNoInteractions(service);
   }
 

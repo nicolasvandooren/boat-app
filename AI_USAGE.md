@@ -657,3 +657,147 @@ accepts a fixed token so no Keycloak is needed (issuer and audience validation s
 
 **Limitations:** the token is decoded by a mock, so the test does not cover real signature validation during error
 dispatch. Only one exception type was exercised, from one endpoint.
+
+## Backend risk review and final corrections (2026-10-14)
+
+### Prompt 1 (verbatim, review request)
+
+```text
+Perform a final, time-boxed backend risk review before frontend development.
+
+Read CLAUDE.md, the existing backend code, configuration, tests, Docker Compose and backend/README.md.
+
+The backend currently has 48 passing tests. The goal is to identify important untested risks, not to expand the architecture.
+
+Focus on:
+
+1. JWT validation
+   - Verify that the configured JwtDecoder validates token expiration (`exp`) and not-before (`nbf`) in addition to issuer, audience and signature.
+   - Check whether custom JWT validators accidentally replace Spring Security's default timestamp validation.
+
+2. Pagination edge cases
+   - Inspect behavior for extremely large page numbers and resulting offsets.
+   - Identify any realistic risk of unexpected 500 responses.
+   - Do not introduce arbitrary limits without justification.
+
+3. Configuration and security
+   - Check that no real secrets or tokens are committed.
+   - Verify that sensitive Actuator endpoints remain protected.
+   - Review authentication-related logging and CORS configuration.
+   - Distinguish deliberate local-development settings from production-safe settings.
+
+4. Docker and integration
+   - Review healthchecks, startup dependencies and configuration consistency.
+   - Identify issues that could prevent a fresh clone from starting successfully.
+
+5. API contract
+   - Identify any significant inconsistency between actual endpoint behavior, tests and backend/README.md.
+
+Rules:
+- Review and report first; do not modify production code automatically.
+- Classify findings as blocking, important but non-blocking, or optional.
+- Cite exact files and relevant code locations for each finding.
+- Do not add speculative features or refactor working code.
+- Avoid repeating tests already demonstrated unless a concrete gap exists.
+- Recommend at most three high-value corrections.
+- Keep the review short and focused.
+
+At the end, provide a clear GO / NO-GO recommendation for starting frontend development.
+
+Do not commit or push automatically.
+```
+
+### Prompt 2 (verbatim, approval of the review)
+
+```text
+Backend risk review approved. Please implement the final targeted corrections before we freeze the backend.
+
+1. F1 — Pagination:
+   - Add the conservative maximum page constraint of 21,474,836, derived from Integer.MAX_VALUE / maximum page size (100).
+   - Document that this is a deliberate API limit, not the exact limit for every page/size combination.
+   - Add a focused HTTP 400 regression test.
+   - Verify the behavior with an authenticated request through Docker Compose.
+
+2. F2 — PostgreSQL NUL characters:
+   - First reproduce the behavior separately for name, description and search against real PostgreSQL.
+   - If the error is confirmed, implement the smallest maintainable validation fix.
+   - Verify the resulting HTTP response is 400, not 500, and contains no JDBC or SQL implementation details.
+   - Avoid broad exception handlers or unnecessary validation frameworks.
+
+3. O1 — JWT validity:
+   - Add focused regression tests proving that expired and not-yet-valid JWTs are rejected by the configured validators.
+
+4. Update backend/README.md and AI_USAGE.md with actual decisions, corrections, testing results and limitations.
+
+5. Run formatting and the full backend test suite using JDK 21.
+
+Constraints:
+- Keep all changes limited to these findings.
+- Do not refactor existing architecture.
+- Do not change Docker Compose or frontend code.
+- Do not introduce additional features.
+- Do not spend more than approximately 30 minutes investigating unexpected issues; report blockers instead.
+- Make meaningful local commits.
+- Do not push or merge automatically.
+
+At the end, report the actual test results and any unresolved risks. Stop before frontend development.
+```
+
+### Review findings (read-only phase, with library behavior checked via `javap` on the resolved jars)
+
+| Id | Class | Finding |
+|---|---|---|
+| F1 | important | Spring Data JPA 3.5.13's `PageableUtils.getOffsetAsInteger` throws `InvalidDataAccessApiUsageException` when `page * size > Integer.MAX_VALUE`; there was no upper bound on `page`, so this produced 500 |
+| F2 | important (suspected, then confirmed) | PostgreSQL rejects `U+0000` in text; NUL in `name`, `description` or `search` reached the driver and produced 500 |
+| O1 | optional | `exp`/`nbf` *are* validated: `JwtValidators.createDefaultWithIssuer` → `createDefaultWithValidators` adds `JwtTimestampValidator` (60 s skew), so the custom validator does not replace it. But no test pinned this |
+| — | no issue | no committed secrets or tokens; only Actuator `health` exposed; no backend CORS; Compose healthchecks and dependency order consistent; local-dev-only settings (Keycloak `start-dev`/HTTP, `admin/admin`, `demo/demo`, DB defaults, published `:8080`) are deliberate and documented |
+
+Recommendation given: **GO** for frontend development, with F1, F2 and O1 to be fixed before the backend freeze.
+
+### Reproduction before the fix
+
+- **Real PostgreSQL, using a temporary probe test that was not committed:** `name`, `description` (on flush) and
+  `search` all failed with `PSQLException: invalid byte sequence for encoding "UTF8": 0x00`. The exception surfaced
+  as `org.hibernate.exception.DataException` for the two fields and `DataIntegrityViolationException` for search.
+- **HTTP through Compose with a real token:**
+  - `GET ?page=21474836&size=100` → 200 with an empty page;
+  - `GET ?page=21474837&size=100` → **500**;
+  - `?search=a%00b`, POST with a NUL in `name`, and POST with a NUL in `description` → **500**. Spring Boot's
+    `/error` body contained no SQL details, but the status was wrong.
+
+### Corrections implemented
+
+- **F1**: `BoatController.MAX_PAGE = Integer.MAX_VALUE / 100` (21 474 836) as `@Max` on `page`. This is a deliberate,
+  conservative API limit that is correct for every allowed `size`, not the exact limit for each page/size
+  combination. The existing parameter-validation handler renders it as 400.
+- **F2**: `@Pattern(regexp = "[^\\x00]*", message = "must not contain NUL characters")` on `BoatRequest.name`,
+  `BoatRequest.description` and the `search` request parameter, sharing one constant. No new handler and no
+  catch-all handler.
+- **O1**: `TokenValidatorTest` now covers an expired token (`exp` 120 s in the past) and a not-yet-valid token
+  (`nbf` 120 s in the future). Both lie beyond the 60 s skew and both are rejected.
+- `backend/README.md`: the page bound with its rationale and conservativeness, the NUL rule in the validation table
+  and the layer differences, the `exp`/`nbf` validation, and the test table.
+
+### Correction during implementation
+
+- The first version of the search NUL controller test got 200. The cause was the test, not the fix: MockMvc's
+  `get("/api/boats?search=a%00b")` URL template re-encodes `%` to `%25`, so the parameter was the literal text
+  `a%00b`. The test now sends the real character via `.param("search", "a\u0000b")`. The Compose run confirms 400
+  for a real `%00` from curl.
+
+### Verification (all executed)
+
+| Check | Result |
+|---|---|
+| `./mvnw spotless:apply spotless:check verify` (JDK 21 container, Testcontainers) | BUILD SUCCESS, **56 tests** (was 48): +1 page-limit row, +1 max-page accepted, +2 NUL body, +1 NUL search (controller); +1 max page on real PostgreSQL (service); +2 JWT validity |
+| Compose after rebuild, real token through nginx | `page=21474836&size=100` → 200 empty page; `page=21474837&size=100` and `page=2147483647` → 400 `must be less than or equal to 21474836`; `search=a%00b`, NUL in name, NUL in description → 400 `must not contain NUL characters` with the right `field`; normal search, POST and DELETE still 200/201/204 |
+| Response bodies | validation ProblemDetail only; no `PSQLException`, `0x00`, `UTF8` or SQL text |
+| Backend log after restart | 0 `ERROR`/`PSQLException` lines; DB left with 0 boats; throwaway token script deleted |
+
+### Limitations
+
+- NUL is only rejected where clients can write text: the `BoatRequest` fields and `search`. Other control
+  characters are accepted and stored as sent.
+- The JWT validity tests exercise the configured validator directly, not a signed token end to end through the
+  filter chain. Signature validation remains covered by the earlier manual Compose verification.
+- CI has not run these commits (not pushed).
