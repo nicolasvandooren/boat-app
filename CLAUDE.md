@@ -47,8 +47,13 @@ A small boat management app built for a time-boxed technical challenge. Prioriti
 - Structure: `src/App.tsx` (routes), `src/auth/` (OIDC config, `RequireAuth`, `SignedOutPage`),
   `src/components/` (shared UI such as `Layout`), `src/styles/` (`tokens.css` design tokens, `global.css`).
   Boat UI goes in `src/features/boats/`. Extract a component only when it is reused or clearly separates concerns.
-- Server state lives in TanStack Query, never copied into component state. Query keys for user data must
-  include the signed-in user's `sub`. The cache is cleared on logout and when the subject changes.
+- Server state lives in TanStack Query, never copied into component state. Query keys for user data are
+  `[feature, sub, ...]` (the subject at index 1). Logout calls `queryClient.clear()`. When the subject changes,
+  `App.tsx` removes only queries of other subjects. Never `clear()` while the current user's queries are mounted:
+  that strands them in a permanent loading state (seen when the session is restored on page load).
+- List state (page, search) lives in the URL; `page` is zero-based like the API.
+- nginx: HTML is `Cache-Control: no-cache`, hashed `/assets/*` are immutable, and missing assets return 404.
+  Keep this when changing `frontend/nginx.conf`.
 - Styling: CSS Modules per component plus the global tokens. No UI framework. Text colors must keep ≥ 4.5:1 contrast.
 
 ### Authentication flow (frontend, do not break)

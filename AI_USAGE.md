@@ -1226,3 +1226,211 @@ First, provide a concise plan covering:
 
 - No axe checks yet (planned for 3A.3). Contrast was chosen from token values, not measured in the browser.
 - CI has not run these commits (not pushed).
+
+## Iteration 3A.2 — Fleet overview and nginx caching (2026-10-14)
+
+### Prompt 1 (verbatim, approval of 3A.1 and scope of 3A.2, sent in plan mode)
+
+```text
+Checkpoint 3A.1 is approved. Proceed with iteration 3A.2 — Fleet Overview.
+
+Keep the existing architecture and authentication unchanged.
+
+### Step 1 — Fix the verified Nginx caching issue
+
+Inspect the actual nginx.conf before editing.
+
+Make the smallest safe change so that:
+- SPA routes continue to serve index.html.
+- HTML is revalidated rather than served from a stale browser cache.
+- Existing Vite hashed assets can be cached long-term.
+- Missing /assets/* files return 404 instead of index.html with status 200.
+
+Verify the behavior using HTTP requests for /, /index.html, /boats, an existing asset and a missing asset.
+
+Do not modify backend or Keycloak configuration.
+
+### Step 2 — Implement the fleet overview
+
+Replace the /boats placeholder with a functional fleet overview using:
+
+GET /api/boats?page=0&size=10&search=
+
+Requirements:
+- TanStack Query for server state.
+- User-specific query keys including the authenticated subject.
+- Typed API responses matching the backend DTOs.
+- Authorization header with the current access token.
+- AbortSignal support.
+- Minimal ProblemDetail-aware error handling.
+- Responsive Nautical Premium boat cards.
+- Boat name, description and creation date.
+- Search by name or description.
+- Debounced search, with page reset on search changes.
+- Zero-based page and search parameters in the URL.
+- Server-side pagination using totalPages and totalElements.
+- Loading, empty fleet, empty search results, 401 and generic error states.
+- Accessible labels, keyboard navigation, focus styles and retry action.
+
+Prefer simple components and reuse the foundation from 3A.1. Do not introduce another state-management library or a UI framework.
+
+Do not implement the boat detail page yet; that belongs to 3A.3. Boat cards can link to /boats/:id in preparation for that iteration.
+
+### Step 3 — Test and verify
+
+Add focused tests for:
+- Successful list loading.
+- Empty fleet and empty search results.
+- Search updating the URL and resetting pagination.
+- Pagination.
+- API errors and retry.
+- Authentication-aware data fetching.
+
+Run formatting, lint, type checking, tests and production build.
+
+Verify in Google Chrome:
+- Authenticated fleet loading.
+- Search.
+- Pagination.
+- Loading and error behavior where practical.
+- Desktop and mobile layout.
+- No unexpected console or network errors.
+
+You may create a small number of clearly identified development boats through the existing authenticated API if needed for browser verification. Do not expose tokens in logs or reports.
+
+If Chrome extension click automation fails, report the limitation instead of claiming a successful real-user interaction.
+
+### Delivery
+
+- Use the existing feature branch.
+- Make meaningful local commits.
+- Update documentation and AI_USAGE.md.
+- Do not push or merge.
+- Stop after 3A.2 and report actual results.
+
+Prioritize completing the working fleet overview over optional styling refinements.
+```
+
+### Prompt 2 (verbatim, review of the AI's plan)
+
+```text
+The 3A.2 plan is approved with three final adjustments.
+
+1. Do not render clickable boat links to `/boats/:id` while that route is unimplemented. Make the cards navigable in 3A.3 when the detail page is ready. No intentionally broken user journeys.
+
+2. Ensure the debounced search input is not reset during normal typing. Synchronize its local state only when the URL search parameter actually changes externally. Avoid misleading stale results when changing the search term; `keepPreviousData` is primarily useful for pagination.
+
+3. Keep browser verification pragmatic:
+   - Development seed data must be clearly identified and avoid duplicate creation.
+   - Test the 500/Retry scenario through automated tests rather than stopping the backend.
+   - Prefer actual browser interactions; distinguish scripted interactions from real clicks in the report.
+
+Everything else is approved.
+
+Proceed directly with 3A.2 implementation, including the verified Nginx caching fix.
+
+Do not start another planning cycle. Run all quality checks, verify the fleet in Chrome, make meaningful local commits, and stop for review before 3A.3. Do not push.
+```
+
+### Prompt 3 (verbatim, final approval)
+
+```text
+Approved. Proceed with implementation of 3A.2 now.
+
+The Final adjustments section is authoritative. Ignore the obsolete instructions elsewhere in the plan about clickable boat cards, displaying previous search results for a different search term, or stopping the backend for retry testing.
+
+Pay particular attention to behavioral tests for the debounced search:
+- Normal typing must not unexpectedly reset the input.
+- Pressing Enter must apply the search immediately.
+- Clearing search must update the URL correctly.
+- Changing search must reset pagination.
+- Browser back/forward must keep the input and URL synchronized.
+- No stale results from a different search should appear.
+
+Ensure non-clickable cards do not visually suggest that they are interactive.
+
+Keep the development data seeding idempotent, including after a partially completed previous run.
+
+No further planning cycle is necessary. Implement, verify, commit locally, and report the results. Stop before 3A.3. Do not push.
+```
+
+### AI proposals the developer corrected
+
+- **Card links to the unimplemented `/boats/:id`.** The AI's plan made each card a link that would show "Page not
+  found" until 3A.3. Rejected: no intentionally broken journeys. Cards are plain articles with no hover, pointer
+  or focus styling.
+- **`keepPreviousData` for every query change.** The plan kept the previous results during a new search too,
+  which shows stale results for a different term. Now only pagination keeps the previous data; a new search shows
+  the loading state.
+- **Stopping the backend to test Retry in the browser** was replaced by automated tests.
+- **Again, the plan was patched instead of rewritten.** The developer had to state that the "Final adjustments"
+  section overrides the rest.
+
+### Decisions
+
+- **nginx:**
+  - `location /assets/` uses `try_files $uri =404` with `Cache-Control: public, max-age=31536000, immutable`.
+  - `location /` adds `Cache-Control: no-cache`; the SPA fallback is unchanged.
+  - The first version used `add_header … always`, which also put the one-year header on the **404** for a missing
+    asset. A browser could then cache that failure for a year. Without `always`, the header is sent only on
+    successful responses.
+- **API client:** `apiGet(path, token, signal?)`. `ApiError` keeps the ProblemDetail `title` and `detail` when
+  the error body is JSON. Empty 401 bodies and HTML error pages don't cause parse errors.
+- **Query:** the key is `['boats', sub, 'list', { page, search }]`, enabled only with both a token and a subject.
+  `placeholderData` returns the previous data only when the previous key has the same `search`.
+- **Search input** (`BoatSearch`): local input state plus the last value sent. A URL change resets the input only
+  when it differs from that value, so the URL echoing what was just typed never touches it. This uses the
+  "adjust state during render" pattern; the debounce timer calls an effect event (`useEffectEvent`, React 19.2+).
+  A 300 ms debounce, Enter applies immediately, and a new search drops `page` with `replace: true`.
+  Pagination links push history.
+- **401** shows "Your session has expired." with a user-initiated **Sign in again**. No retry and no redirect.
+  The detail of a 400 is shown; network errors and 5xx get a generic message with **Retry**.
+- **Lint fixes made in the code, without disabling rules:**
+  - `FormEvent` is deprecated in @types/react 19.3, so `SubmitEvent` is used instead.
+  - Effect events may only be called from effects, so the handlers use a plain function and only the timer goes
+    through `useEffectEvent`.
+
+### Problem found in the browser and fixed
+
+On page load, the fleet stayed on **"Loading boats…"** indefinitely. Evidence collected in Chrome:
+- The only `/api` request ended after 1 ms with status 0 and never reached nginx (the extension showed it as 503).
+- The TanStack cache was **empty** while the page still showed the loading state.
+
+Cause, in the 3A.1 identity-change effect:
+1. oidc-client-ts restores the user from sessionStorage asynchronously, so `sub` goes from `undefined` to the user
+   id.
+2. The fleet query (a child effect) starts first.
+3. Then `App`'s effect called `queryClient.clear()`, which removed the in-flight query, aborted the request and
+   left the mounted observer stranded.
+
+The unit tests missed this because the mocked user was present from the first render.
+
+The fix: when the subject changes, `App.tsx` now calls `removeQueries` with a predicate that keeps keys whose
+index 1 is the current subject. Logout still calls `clear()` before redirecting. A regression test renders with
+`isLoading: true` and then signs in; it failed before the fix and passes after it. This corrects the 3A.1
+decision "clear the whole cache on identity change".
+
+### Verification performed
+
+| Check | Result |
+|---|---|
+| `curl -sI` after rebuild | `/`, `/index.html`, `/boats` → 200 `no-cache`; existing `/assets/index-*.js` → 200 `max-age=31536000, immutable`; `/assets/missing.js` → **404** without the cache header; `If-None-Match` on `/` → 304; `/api/me` without token → 401 |
+| Effect in the browser | after the rebuild, Chrome loaded the new bundle straight away (in 3A.1 it had served a cached old `index.html`) |
+| `format:check`, `lint`, `typecheck`, `test`, `build` | all pass; **31 tests** in 4 files (BoatsPage 15, App 7, RequireAuth 5, client 4) |
+| Mutation checks | resetting the input on every URL change fails "keeps a trailing space…" and "applies the search immediately on Enter"; always keeping the previous data fails "never shows results of a previous search"; the cache regression test fails with `clear()` |
+| Dev data | 23 boats named `[dev] …` created through `POST /api/boats` from page JS with the session token (never printed). The script reads the existing `[dev]` names first and creates only the missing ones; a second run created 0. They remain in the local database for 3A.3. |
+| Chrome, **real** input (trusted events confirmed by a capture-phase probe) | Next page ×2 (`?page=1`, `?page=2`, "Page 3 of 3", Next no longer a link); typing "harbour" from page 3 → one debounced request, `?search=harbour`, page dropped, 5 case-insensitive matches; select + type "zzz" + Enter → empty search state; **Clear search** → URL without `search`, input empty, 23 boats; typing "[dev]" then Next page; browser back → input "[dev]"; back again → `?page=1` and empty input; forward → "[dev]" restored; Tab order search → Clear → Next page with a visible 3 px teal focus ring |
+| Chrome, empty fleet | before seeding, `/boats` showed "0 boats" and "Your fleet is empty." |
+| Layout | desktop: 3-column grid, non-interactive cards; 390 px (same-origin iframe): single column, header and search stacked, no horizontal overflow, the long description clamped to 3 lines, "No description" for a null description |
+| Console and network | no console messages; after the fix, every `/api/boats` request returned 200 |
+
+In this session all Chrome interactions were real clicks and keystrokes. No scripted clicks were needed. Data
+seeding and state inspection used page JS.
+
+### Limitations
+
+- The 500/Retry, 400 ProblemDetail and 401 states were verified by automated tests only, not in the browser.
+- Mobile layout was checked in a 390 px iframe, not with device emulation.
+- There are two ways to clear the field: the browser's built-in clear icon in `type="search"` and the Clear
+  button. This is redundant but harmless.
+- No axe checks yet (3A.3). CI has not run these commits (not pushed).
