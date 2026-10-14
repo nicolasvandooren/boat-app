@@ -55,7 +55,7 @@ Every endpoint except `/actuator/health/**` requires `Authorization: Bearer <acc
 ## Endpoints
 
 All paths are under `/api`. In Docker Compose the browser reaches them through the frontend's nginx at
-`http://localhost:3000/api/...`. The backend is also exposed directly on `http://localhost:8080` for debugging.
+`http://localhost:3000/api/...`. The backend is also published directly on `http://localhost:8080` (loopback only) for debugging.
 
 | Method | Path | Body | Success | Errors |
 |---|---|---|---|---|

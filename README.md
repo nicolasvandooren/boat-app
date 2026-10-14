@@ -26,10 +26,14 @@ docker compose up --build
 
 Opening the app redirects to Keycloak. Log in with the demo user **`demo` / `demo`**.
 
-These credentials are for local development only. To change the database or Keycloak admin credentials,
-copy `.env.example` to `.env` and edit it. `.env` is git-ignored.
+**All provided credentials (`demo`/`demo`, Keycloak `admin`/`admin`, database `boatapp`/`boatapp`) are strictly
+for local development.** Never use them in a shared or production environment. To change the database or
+Keycloak admin credentials, copy `.env.example` to `.env` and edit it. `.env` is git-ignored.
 
-Ports 3000, 8080 and 8081 must be free. The Keycloak realm is re-imported from `keycloak/realm-boatapp.json` on every start.
+Ports 3000, 8080 and 8081 must be free on `127.0.0.1`. Compose publishes them on the loopback interface only,
+so the app, the API and the Keycloak admin console are not reachable from other machines on your network. Open
+the app as `http://localhost:3000`, the origin registered in Keycloak. The Keycloak realm is re-imported from
+`keycloak/realm-boatapp.json` on every start.
 
 ## How the pieces fit together
 

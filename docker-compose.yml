@@ -1,4 +1,7 @@
 # Local development stack. All credentials below are local-only defaults (see .env.example).
+# Published ports bind to 127.0.0.1 only, so the stack (and the Keycloak admin console with its default
+# credentials) is not reachable from other machines on the network. Containers still talk over the internal
+# Compose network (backend:8080, keycloak:8080, postgres:5432).
 #
 # URL coherence:
 #   Browser  -> frontend  http://localhost:3000 (nginx proxies /api to backend:8080)
@@ -35,7 +38,7 @@ services:
     volumes:
       - ./keycloak/realm-boatapp.json:/opt/keycloak/data/import/realm-boatapp.json:ro
     ports:
-      - "8081:8080"
+      - "127.0.0.1:8081:8080"
     healthcheck:
       # The image ships without curl/wget; use bash's /dev/tcp against the management port.
       test:
@@ -60,7 +63,7 @@ services:
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/boatapp/protocol/openid-connect/certs
       OIDC_AUDIENCE: boat-api
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,7 +78,7 @@ services:
         VITE_OIDC_CLIENT_ID: boat-frontend
     image: boatapp-frontend:local
     ports:
-      - "3000:80"
+      - "127.0.0.1:3000:80"
     depends_on:
       backend:
         condition: service_healthy
