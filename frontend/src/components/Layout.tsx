@@ -18,7 +18,9 @@ export function Layout() {
     if (previousPathname.current === pathname) return
     previousPathname.current = pathname
     window.scrollTo(0, 0)
-    mainRef.current?.focus()
+    // A page can name a better starting point (e.g. a "Boat added." confirmation) with data-focus-on-navigate.
+    const target = mainRef.current?.querySelector<HTMLElement>('[data-focus-on-navigate]')
+    ;(target ?? mainRef.current)?.focus()
   }, [pathname])
 
   const signOut = () => {

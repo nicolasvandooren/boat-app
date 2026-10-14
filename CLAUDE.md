@@ -80,6 +80,21 @@ A small boat management app built for a time-boxed technical challenge. Prioriti
 - Status messages use `role="status"` and errors use `role="alert"`. Every control has an accessible name. No unnecessary ARIA.
 - Each page sets a document title (`useDocumentTitle`). After client-side navigation, `Layout` moves focus to `<main>`.
 - Card pattern: one link (the title) per card, stretched with `::after`; no nested interactive elements.
+- **Forms** (`BoatForm`):
+  - Use `noValidate` and validate the exact body that will be sent, mirroring the backend's Bean Validation.
+  - Each field gets a visible label and hint, and an inline error linked with `aria-invalid` and
+    `aria-describedby`.
+  - Focus the first invalid field; a form-level alert gets focus when no field matches.
+  - Disable fields and submit while a mutation is pending. Never drop the user's input on failure.
+- **Mutations:**
+  - No optimistic updates.
+  - On success, `setQueryData` the server response under `['boats', sub, 'detail', id]` and invalidate
+    `['boats', sub, 'list']`.
+  - Navigate with `replace` so Back doesn't return to a submitted form.
+- Pages can mark an element with `data-focus-on-navigate` (and `tabIndex={-1}`); `Layout` focuses it instead of
+  `<main>` after navigation.
+- Route tests render through `src/test/boatRoutes.tsx`, which uses `createQueryClient()` (real `staleTime`, no
+  retries). A bare `new QueryClient()` has `staleTime: 0` and causes refetches the app never makes.
 - Use `axeViolations()` from `src/test/axe.ts` for representative states of new pages. Automated checks (lint
   and axe) do not prove compliance; keyboard, contrast and screen reader behavior need manual checks.
 

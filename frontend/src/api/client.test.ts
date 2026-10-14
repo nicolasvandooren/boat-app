@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, apiGet } from './client'
+import { ApiError, apiGet, apiSend } from './client'
 
 const fetchMock = vi.fn<typeof fetch>()
 vi.stubGlobal('fetch', fetchMock)
@@ -66,5 +66,43 @@ describe('apiGet', () => {
     const error = await failure(apiGet('/api/x', 't'))
     expect(error.status).toBe(502)
     expect(error.title).toBeUndefined()
+  })
+
+  it('sends JSON with the bearer token and returns the saved resource', async () => {
+    respond(201, { id: 'b1' })
+
+    await expect(apiSend('POST', '/api/boats', 'token-1', { name: 'Gull' })).resolves.toEqual({
+      id: 'b1',
+    })
+
+    const [url, init] = fetchMock.mock.calls[0] ?? []
+    expect(url).toBe('/api/boats')
+    expect(init?.method).toBe('POST')
+    expect(init?.body).toBe('{"name":"Gull"}')
+    const headers = new Headers(init?.headers)
+    expect(headers.get('Content-Type')).toBe('application/json')
+    expect(headers.get('Authorization')).toBe('Bearer token-1')
+  })
+
+  it('keeps well-formed field errors and drops malformed ones', async () => {
+    respond(
+      400,
+      {
+        title: 'Validation failed',
+        status: 400,
+        errors: [
+          { field: 'name', message: 'must not be blank' },
+          { field: 'description' },
+          'nonsense',
+          { field: 'other', message: 'is wrong' },
+        ],
+      },
+      'application/problem+json',
+    )
+    const error = await failure(apiSend('PUT', '/api/boats/x', 't', {}))
+    expect(error.fieldErrors).toEqual([
+      { field: 'name', message: 'must not be blank' },
+      { field: 'other', message: 'is wrong' },
+    ])
   })
 })

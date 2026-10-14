@@ -1875,3 +1875,176 @@ Stop and report the cleaned commit history and verification results. Do not push
 - Real GitHub behavior. The emulation is not GitHub's matcher. After pushing, check a docs-only PR (no workflow
   runs), a frontend-only PR (only Frontend), and a PR changing `backend/README.md` (no Backend).
 - CI has not run these commits (not pushed).
+
+## Iteration 3B.1 — Create and edit boats (2026-10-14)
+
+### Prompt 1 (verbatim, sent in plan mode)
+
+```text
+Prepare iteration 3B.1 — Create and Edit Boats.
+
+First inspect the completed frontend and backend API contracts. Reuse the established authentication, TanStack Query, API client, routing, CSS Modules, design tokens and test conventions.
+
+Scope:
+- POST /api/boats
+- PUT /api/boats/{id}
+- /boats/new and /boats/:id/edit
+- Shared, accessible BoatForm component
+- Name required, max 150 characters
+- Description optional, max 2000 characters
+- Client validation consistent with backend constraints
+- Server-side validation errors displayed near relevant fields
+- Loading, submitting, success, 400, 401, 404 and network error handling
+- TanStack Query mutations with correct cache invalidation
+- Create button on fleet overview and Edit action on boat detail
+- Keyboard accessibility and responsive design
+- Focused Vitest/RTL tests and real Chrome verification
+
+Keep the implementation lightweight:
+- No new form library unless the existing code demonstrates a concrete need.
+- No optimistic updates.
+- No backend or Keycloak changes.
+- Do not implement deletion yet; that belongs to 3B.2.
+
+First present a concise implementation plan with any actual risks or questions. Do not modify files until the plan is approved.
+
+Keep documentation and AI_USAGE.md updated, use meaningful local commits and do not push automatically.
+```
+
+### Prompt 2 (verbatim, review of the AI's plan)
+
+```text
+Iteration 3B.1 is approved with four small adjustments.
+
+1. Preserve description values consistently with the backend:
+   - An exactly empty description may be sent as null.
+   - Otherwise, preserve the user's description as entered, including whitespace and line breaks.
+   - Do not silently normalize whitespace-only descriptions to null.
+
+2. Prevent ambiguous edits during submission:
+   - Disable the form fields and submit button while a mutation is pending.
+   - Prevent duplicate submission.
+   - Preserve entered values if submission fails.
+
+3. Handle server-side field errors robustly:
+   - Map recognized ProblemDetail field errors to their corresponding form fields.
+   - Display unknown or malformed field errors at form level.
+   - Always show an understandable fallback message for 400 responses without usable field errors.
+   - Maintain accessible error associations and focus behavior.
+
+4. Preserve navigation context safely:
+   - Create and Edit should navigate to the saved boat's detail page on success.
+   - Cancel and Back links should work even when the form was opened directly by URL.
+   - Avoid introducing unnecessary global navigation state.
+
+Everything else is approved.
+
+Proceed with 3B.1 implementation. Use the existing architecture, keep tests colocated, run all quality checks and verify create/edit flows in Google Chrome.
+
+Do not implement deletion yet.
+
+Stop and report before 3B.2. Do not push automatically.
+```
+
+### Prompt 3 (verbatim, after the AI patched the plan instead of reconciling it)
+
+```text
+The 3B.1 implementation plan is approved.
+
+The "Approved adjustments" section is authoritative. Ignore conflicting older instructions later in the document, especially:
+
+- Whitespace-only descriptions must be preserved exactly as entered, not converted to null.
+- Form fields must be disabled while a mutation is pending, not left editable.
+
+Ensure validation is consistent with the value actually submitted to the backend, particularly name trimming and length limits.
+
+Proceed directly with implementation. Do not start another planning cycle.
+
+Keep the existing architecture, run all quality checks, verify create/edit and validation flows in Chrome, commit locally, and stop before 3B.2.
+
+Do not push or merge automatically.
+```
+
+### AI proposals the developer corrected
+
+- **Normalizing a whitespace-only description to `null`.** Rejected: the backend stores descriptions as sent,
+  so only `''` becomes `null`.
+- **Leaving fields editable while saving.** Rejected: fields and submit are disabled to avoid ambiguous edits.
+- **Again, the plan was patched instead of rewritten**, which left contradictions. The AI then reconciled the plan
+  file before implementation.
+
+### Decisions
+
+- **Branch:** `vandoo/feat/boat-create-edit` already existed (created by the developer) and pointed exactly at
+  `origin/main` after the CI split was merged (PR #6). It was verified and reused.
+- **API layer:**
+  - `apiSend('POST' | 'PUT')` shares one `request` function with `apiGet`. Lint (`no-misused-spread`) caught that
+    spreading `HeadersInit` would lose array or `Headers` values, so headers are now built with `new Headers()`.
+  - `ApiError.fieldErrors` keeps only well-formed `{ field, message }` entries.
+  - `useCreateBoat`/`useUpdateBoat` set the server response under the user-scoped detail key and invalidate the
+    user's list queries.
+- **`boatInput.ts`** is the single source of truth for both the body and its validation:
+  - The name is trimmed and `''` becomes `null`.
+  - Validation runs on the body that will actually be sent: the trimmed name length and the raw description
+    length, counted in UTF-16 code units like `@Size`.
+  - It mirrors the backend's NUL rule.
+  - There is no `maxLength` attribute, because it would silently cut off pasted text.
+- **`BoatForm`:**
+  - `noValidate`; hints and counters; `aria-invalid` and `aria-describedby` to the inline error.
+  - Focus moves to the first invalid field. Server errors move focus through an effect event (`useEffectEvent`)
+    that fires only for a new error; an earlier draft used a lint suppression, which was replaced.
+  - Controls are disabled per element (an earlier draft wrapped them in a legend-less `<fieldset>`).
+  - Server errors:
+    - fields it doesn't know about are listed in the form-level alert
+    - a 400 without usable field errors gets the fallback message plus the ProblemDetail `detail`
+    - 401 shows "Sign in again" with no automatic redirect
+    - 404 explains the boat is gone
+    - network errors and 5xx get a generic retry message
+- **Pages:**
+  - `/boats/new`; `/boats/:id/edit`, which mounts the form only once the boat has loaded (no syncing props into
+    state); not-found states with a "Back to fleet" link.
+  - Saving navigates to the detail page with `replace` and a notice. `Layout` now focuses an element marked
+    `data-focus-on-navigate` when there is one, so the confirmation is read out first.
+- **`navigation.ts`** replaces the private helper in the detail page and the `BoatLinkState` type, so all pages
+  validate location state the same way. There is no global state.
+- Shared `.button-link` / `.button-link.secondary` classes for links styled as buttons, plus a disabled button
+  style.
+
+### Problems found and fixed
+
+- **Test client didn't match the app's.** Page tests first used `new QueryClient()` with `staleTime: 0`, so the
+  detail page refetched after a save and the tests' handlers served stale data. That showed up as old values and
+  "Invalid time value". The app uses 30 s (`createQueryClient`), and a throwaway debug test confirmed the cause.
+  `src/test/boatRoutes.tsx` now builds on `createQueryClient()` with retries off.
+- **Search summary grammar.** Chrome showed "1 boat match "3B.1"". Fixed to "1 boat matches", with a test, in a
+  separate commit.
+
+### Verification performed
+
+| Check | Result |
+|---|---|
+| `format:check`, `lint`, `typecheck`, `test`, `build` | all pass; **81 tests** in 12 files (BoatForm 13, NewBoatPage 7, EditBoatPage 6, boatInput 7, client 6, …) |
+| Mutation checks | removing the pending guard fails 2 tests; turning a whitespace-only description into `null` fails 3; removing list invalidation fails 2 |
+| Chrome, empty submit (**real** click; capture-phase probe confirmed trusted events) | "Enter a name." inline, `aria-invalid="true"`, `aria-describedby` = hint, counter, error; focus on Name; no request |
+| Chrome, too long (**real** typing, 153 characters + Enter) | "Name must be 150 characters or fewer.", counter "153 / 150", focus on Name, no request |
+| Chrome, keyboard-only create (select, type, Tab, type, Tab, Enter) | POST 201 → `/boats/<id>`, focused "Boat added.", `h1` and title set; the API stores the name trimmed and the description as typed; no extra GET by the app |
+| Fleet after create | "24 boats", the new boat first (list invalidated) |
+| Search "3B.1" → card → Edit → **Cancel** | back on the detail page with no notice; "Back to fleet" still carries `?search=3B.1` |
+| Edit (real typing incl. Enter in the textarea for a line break, real click on Save) | PUT 200 → "Changes saved." (focused); the API description is exactly `"Renamed in the 3B.1 edit check.\nSecond line.  "`, and the page shows the same |
+| Back to fleet | `?search=3B.1` restored, renamed boat with its new description, the list refetched after the PUT |
+| 390 px (same-origin iframe, **scripted** empty submit) | no horizontal overflow, readable error state |
+| Contrast on the form with an error | 15 text elements, lowest 6.57:1 (the error text), no failures |
+| Console and network | no console messages; POST 201, PUT 200, all GETs 200 |
+
+### Data
+
+- Created `[dev] 3B.1 Sea Otter`, since renamed to `[dev] 3B.1 Sea Otter II`. It stays in the local database
+  with the other `[dev]` boats; deletion is 3B.2.
+
+### Limitations
+
+- Server-side 400 field mapping, 401, 404 on save and network errors are verified by automated tests only. The
+  client mirrors the server rules, so the UI can't produce these 400s.
+- A 401 while editing loses unsaved input (sign-in is a full-page redirect); the message warns about it.
+- The notice is stored in history state, so it reappears if the detail page is reloaded right after saving.
+- There's no "unsaved changes" prompt when leaving the form. CI has not run these commits (not pushed).

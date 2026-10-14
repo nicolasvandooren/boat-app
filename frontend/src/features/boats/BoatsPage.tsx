@@ -4,6 +4,7 @@ import { useDocumentTitle } from '../../components/useDocumentTitle'
 import { BoatSearch } from './BoatSearch'
 import { LoadError } from './LoadError'
 import { parseListParams, useBoats } from './api'
+import type { BoatNavState } from './navigation'
 import type { Boat, BoatPage } from './types'
 import styles from './BoatsPage.module.css'
 
@@ -13,13 +14,8 @@ function countLabel(count: number) {
   return `${count} ${count === 1 ? 'boat' : 'boats'}`
 }
 
-/** Location state passed to the detail page so "Back to fleet" can restore page and search. */
-export interface BoatLinkState {
-  listSearch: string
-}
-
 function BoatCard({ boat, listSearch }: { boat: Boat; listSearch: string }) {
-  const state: BoatLinkState = { listSearch }
+  const state: BoatNavState = { listSearch }
   return (
     <li className={styles.card}>
       <article>
@@ -80,12 +76,14 @@ function summary(data: BoatPage | undefined, isPending: boolean, search: string)
   if (isPending) return 'Loading boats…'
   if (!data) return ''
   const count = countLabel(data.totalElements)
-  return search ? `${count} match “${search}”` : count
+  if (!search) return count
+  return `${count} ${data.totalElements === 1 ? 'matches' : 'match'} “${search}”`
 }
 
 export function BoatsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
+  const newBoatState: BoatNavState = { listSearch: location.search }
   useDocumentTitle('Fleet overview')
   const { page, search } = parseListParams(searchParams)
   const { data, error, isPending, isPlaceholderData, refetch } = useBoats({ page, search })
@@ -155,6 +153,9 @@ export function BoatsPage() {
       return (
         <div className={styles.notice}>
           <p>Your fleet is empty. No boats have been added yet.</p>
+          <Link className="button-link" to="/boats/new" state={newBoatState}>
+            Add your first boat
+          </Link>
         </div>
       )
     }
@@ -177,7 +178,12 @@ export function BoatsPage() {
   return (
     <section aria-labelledby="fleet-heading">
       <div className={styles.header}>
-        <h1 id="fleet-heading">Fleet overview</h1>
+        <div className={styles.titleRow}>
+          <h1 id="fleet-heading">Fleet overview</h1>
+          <Link className="button-link" to="/boats/new" state={newBoatState}>
+            Add boat
+          </Link>
+        </div>
         <BoatSearch search={search} onSearch={updateSearch} />
       </div>
       {/* Always rendered, so screen readers announce changes in the result count. */}
