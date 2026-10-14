@@ -74,4 +74,7 @@ run the backend checks in a container (the Docker socket is mounted for Testcont
 docker run --rm -v "$PWD/backend":/w -w /w -v /var/run/docker.sock:/var/run/docker.sock -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal maven:3.9.16-eclipse-temurin-21 ./mvnw spotless:check verify
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same checks and builds both Docker images.
+CI runs the same checks and builds the Docker images in two workflows, `.github/workflows/backend.yml` and
+`frontend.yml`. Each runs only when its area changes (native `paths` filters) and can be started manually.
+Root documentation, `docker-compose.yml`, `keycloak/` and `.env.example` trigger neither. Because skipped
+workflows report no status, see `CLAUDE.md` ("CI") before making their checks required.
