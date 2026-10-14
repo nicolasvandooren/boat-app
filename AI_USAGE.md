@@ -801,3 +801,428 @@ Recommendation given: **GO** for frontend development, with F1, F2 and O1 to be 
 - The JWT validity tests exercise the configured validator directly, not a signed token end to end through the
   filter chain. Signature validation remains covered by the earlier manual Compose verification.
 - CI has not run these commits (not pushed).
+
+## Pre-frontend browser verification (2026-10-14)
+
+Before any frontend change, the existing OIDC flow was tested in real Google Chrome through Claude Code's
+browser integration (Claude in Chrome). The first attempts went through an Arc browser connection, where every
+tab-creation call timed out. The AI reported the exact tool errors instead of working around them. The
+developer then switched to Google Chrome.
+
+The developer's verification prompt asked for: click "Log in"; reach the Keycloak page; log in as `demo/demo`;
+return to React; check the displayed user; `GET /api/me` through nginx; refresh; logout. Each check was reported as
+PASS/FAIL/NOT VERIFIED, with no tokens, codes or session values printed.
+
+Result: all 8 checks passed (PKCE S256, code and state removed after the callback, `/api/me` 200 with
+`subject`/`username`, session restored on refresh, Keycloak logout confirmed by the login form reappearing).
+The extension's network log once showed a 503 for an unauthenticated `/api/me`, while the nginx access log showed
+401 for the same request. The AI attributed the 503 to the extension's capture, not the app. One gap against UC1
+was found: an anonymous visitor saw a manual "Log in" button instead of being redirected to Keycloak.
+
+## Iteration 3A.1 — Frontend foundation and automatic login (2026-10-14)
+
+### Prompt 1 (verbatim, sent in plan mode; iteration 3A overall)
+
+```text
+# Iteration 3A — Frontend Architecture & Boat Browsing
+
+You are working on The Boat App, a time-boxed fullstack technical challenge.
+
+**Your task is to design and implement the first functional frontend iteration: authentication integration, fleet overview, pagination, search and boat details.**
+
+First, inspect the existing project and propose an implementation plan. **Do not modify files during planning. Wait for approval before writing code.**
+
+## 1. Current project context
+
+The backend is complete and provides:
+
+- Java 21 / Spring Boot 3.5
+- PostgreSQL with Flyway migrations
+- Keycloak authentication using OAuth2/OIDC
+- JWT validation with issuer, signature, audience and timestamp validation
+- REST CRUD API with pagination and search
+- Consistent ProblemDetail error responses
+- 56 passing backend tests
+
+The frontend already has:
+
+- React, TypeScript and Vite
+- React Router
+- `react-oidc-context` / `oidc-client-ts`
+- An existing API client
+- ESLint, Prettier and Vitest
+- Docker Compose integration through Nginx
+
+Read `CLAUDE.md`, the frontend source code, configuration files, `backend/README.md` and the relevant Docker configuration before proposing changes.
+
+Preserve working code whenever possible.
+
+## 2. Authentication — already verified
+
+The existing OIDC flow has been tested successfully in real Google Chrome using Claude Code's browser integration.
+
+All 8 checks passed:
+
+- Redirect to Keycloak after clicking Log in
+- Authorization Code + PKCE (S256)
+- Successful login with the local demo account
+- Callback to React and successful token exchange
+- Correct cleanup of authorization parameters from the URL
+- Authenticated GET `/api/me` through Nginx
+- Session restoration after page refresh
+- Successful Keycloak logout and session cleanup
+
+No console errors or application network failures were observed.
+
+**Do not replace or unnecessarily refactor this working authentication implementation.**
+
+One behavior must change to satisfy UC1:
+
+- Opening a protected application route without authentication must automatically redirect to Keycloak.
+- After login, the user must reach `/boats`.
+- Authenticated visitors should reach the requested protected route where practical.
+- Add a public `/signed-out` route to avoid automatic re-login after logout.
+- Handle callback processing, authentication errors and loading states without redirect loops.
+- Preserve the existing sessionStorage configuration.
+- Clear user-specific TanStack Query cache when the authenticated session ends or changes.
+
+Verify these changes again in Chrome after implementation.
+
+## 3. Architecture
+
+Use a small, feature-oriented React architecture.
+
+Preferred libraries:
+
+- React Router for navigation
+- `react-oidc-context` for authentication
+- `@tanstack/react-query` for server state, queries and caching
+- CSS Modules and global CSS design tokens for styling
+- Vitest and React Testing Library for tests
+
+Suggested structure (adapt to existing files):
+
+frontend/src/
+- app/
+  - App.tsx
+  - router.tsx
+  - queryClient.ts
+- auth/
+  - oidcConfig.ts
+  - ProtectedRoute.tsx
+- api/
+  - client.ts
+- features/boats/
+  - api.ts
+  - types.ts
+  - BoatsPage.tsx
+  - BoatDetailPage.tsx
+  - components/
+    - BoatCard.tsx
+    - BoatSearch.tsx
+    - BoatPagination.tsx
+- components/
+  - Layout.tsx
+  - LoadingState.tsx
+  - ErrorState.tsx
+- styles/
+  - tokens.css
+  - global.css
+
+Architecture rules:
+
+- Organize business logic by feature.
+- Keep HTTP concerns separate from presentation.
+- Use TanStack Query for server data, caching, retries and invalidation.
+- Do not duplicate server state in component state.
+- Avoid Redux, Zustand or unnecessary global state managers.
+- Avoid premature abstractions or generic service/repository layers.
+- Use strict TypeScript without `any`.
+- Reuse the existing API client where appropriate.
+
+## 4. Visual design — Nautical Premium
+
+Create a modern maritime SaaS interface with:
+
+- Deep navy blue as primary color
+- White and off-white backgrounds
+- Restrained turquoise accents
+- Clear typography and visual hierarchy
+- Subtle borders, rounded corners and restrained shadows
+- Consistent spacing and interaction feedback
+- Responsive layout for desktop, tablet and mobile
+
+Use responsive boat cards rather than a dense table.
+
+Do not add fake images, stock photos or fields that do not exist in the backend.
+
+Keep the visual design professional and lightweight, without excessive animations or decorative effects.
+
+## 5. Routes and features
+
+Implement:
+
+- `/` → redirect to `/boats`
+- `/boats` → authenticated fleet overview
+- `/boats/:id` → authenticated boat detail
+- `/signed-out` → public post-logout page
+
+### Fleet overview
+
+Use:
+
+GET /api/boats?page=0&size=10&search=
+
+Requirements:
+
+- Display name, description and creation date for each boat.
+- Responsive cards with accessible links to details.
+- Server-side pagination using the backend response metadata.
+- Case-insensitive search by name or description (handled by backend).
+- Store page and search state in URL query parameters.
+- Reset page to 0 when the search changes.
+- Optionally debounce search input.
+- Loading, empty-fleet, empty-search and error states.
+- Accessible pagination controls with previous/next navigation.
+- Retry option after request failures.
+
+The backend response is:
+
+{
+  "content": [],
+  "page": 0,
+  "size": 10,
+  "totalElements": 0,
+  "totalPages": 0
+}
+
+Use TanStack Query with query keys that include pagination and search parameters.
+
+### Boat details
+
+Use:
+
+GET /api/boats/{id}
+
+Display:
+
+- Boat name
+- Description
+- Creation date
+- Back navigation
+- Loading and error states
+- Dedicated 404 state
+
+Preserve list search and pagination context when navigating back, where practical.
+
+Do not implement boat creation, editing or deletion in this iteration. Those features belong to 3B.
+
+## 6. API integration
+
+Extend the existing API client.
+
+Requirements:
+
+- Attach the current OIDC access token.
+- Support AbortSignal for cancellable requests.
+- Define TypeScript types matching the backend DTOs.
+- Handle HTTP errors consistently.
+- Preserve relevant ProblemDetail information without exposing internal technical details.
+- Treat 401 responses appropriately without creating automatic redirect loops.
+- Do not log tokens or authorization codes.
+
+Keep API functions small and straightforward.
+
+## 7. ESLint — Airbnb style
+
+I prefer the Airbnb JavaScript/React style guide.
+
+Before changing dependencies:
+
+- Inspect existing versions of React, TypeScript, ESLint and Vite.
+- Check compatibility with the official Airbnb configuration.
+- Prefer Airbnb-compatible React and TypeScript rules.
+- Include `eslint-plugin-jsx-a11y` and React Hooks lint rules.
+- Preserve a modern ESLint flat configuration if practical.
+- Do not downgrade major dependencies solely for Airbnb.
+- If official Airbnb packages are incompatible, propose a modern equivalent and justify it before implementation.
+- Keep Prettier responsible for formatting.
+- Do not disable lint rules broadly just to make generated code pass.
+
+Ensure GitHub Actions continues to check formatting, lint, tests and production builds.
+
+## 8. Accessibility
+
+Target WCAG 2.2 AA where practical.
+
+Requirements:
+
+- Semantic HTML landmarks and headings
+- Keyboard-accessible navigation
+- Visible focus indicators
+- Accessible labels for controls
+- Accessible search and pagination
+- Accessible loading and error feedback
+- Appropriate announcements for asynchronously updated content
+- Sufficient color contrast
+- No unnecessary ARIA
+
+Add automated accessibility checks using a Vitest-compatible axe integration.
+
+Test important components, but do not claim full WCAG compliance based only on automated checks.
+
+## 9. Testing
+
+Add focused behavioral tests for:
+
+- Protected routing and automatic login
+- Public signed-out route
+- Boat list loading and success
+- Empty list and empty search results
+- Search and pagination interactions
+- API error and retry behavior
+- Boat detail rendering
+- Boat not found
+- Basic accessibility violations
+
+Use Vitest and React Testing Library.
+
+Mock external dependencies at appropriate boundaries.
+
+Avoid brittle tests based on implementation details or CSS classes.
+
+## 10. Verification
+
+After implementation:
+
+1. Run Prettier checks.
+2. Run ESLint.
+3. Run TypeScript checks.
+4. Run Vitest.
+5. Run the production build.
+6. Run Docker Compose.
+7. Verify authentication and boat browsing in the connected Google Chrome browser.
+8. Check desktop and mobile layouts.
+9. Inspect browser console and network errors.
+
+Do not claim any verification that was not actually executed.
+
+## 11. Documentation and delivery
+
+Update:
+
+- `CLAUDE.md` with frontend architecture, linting and accessibility conventions.
+- Frontend documentation with development and test commands.
+- `AI_USAGE.md` with meaningful decisions, prompts and verification results.
+
+Preserve the existing detailed AI log. It will be condensed into an evaluator-focused summary before final submission.
+
+Use meaningful commits on a dedicated frontend feature branch.
+
+Do not push or merge automatically.
+
+## Constraints
+
+- Do not modify backend code.
+- Do not modify Keycloak configuration without a demonstrated issue and explicit approval.
+- Do not introduce a heavy UI framework.
+- Do not implement create, update or delete yet.
+- Do not introduce unnecessary abstractions.
+- Do not alter project files during planning.
+
+## Expected output
+
+First, provide a concise plan covering:
+
+1. Proposed file structure and components.
+2. Dependency choices and Airbnb compatibility.
+3. Authentication routing and logout strategy.
+4. API data-fetching and caching strategy.
+5. Visual design and accessibility approach.
+6. Tests and browser verification plan.
+7. Risks and trade-offs.
+8. Estimated implementation complexity.
+
+**Stop after presenting the plan. Wait for approval before implementing iteration 3A.**
+```
+
+### Plan reviews by the developer (three rounds, summarized; each one rejected the plan and asked for changes)
+
+1. **Checkpoints and simplification.** Deliver 3A as 3A.1 (foundation and auth), 3A.2 (fleet overview) and
+   3A.3 (details and accessibility), verifying each before the next. Use fewer files and abstractions,
+   zero-based `page` in the URL, and keep the OIDC config intact. React and TanStack lint plugins are optional.
+   Never force peer dependencies, and verify that the a11y lint rules really fire.
+2. **Preserve the working OIDC flow.** Keep callback changes minimal. Prefer always returning to `/boats` over
+   risky deep-link restore. Include the user's `sub` in boat query keys (in 3A.2). Move AbortSignal,
+   ProblemDetail parsing and boat API work to 3A.2.
+3. **Reconcile contradictions.** The AI's second plan revision still contained parts of the first one (data
+   router, `returnTo`). The developer listed the final decisions: keep `BrowserRouter`, keep `onSigninCallback`
+   unchanged, no `returnTo`/`safeReturnTo`, change only the post-logout URI, and keep cache management minimal.
+
+### AI proposals the developer corrected or rejected
+
+- **Migrating to `createBrowserRouter` for deep-link restore after login.** The AI argued that the router's
+  location would go stale after `history.replaceState`. Rejected as too risky for a flow that already works.
+  Instead, login always lands on `/` → `/boats`, and the existing callback is untouched.
+- **A 1-based `page` in the URL** was replaced with a zero-based one that matches the API (applies in 3A.2).
+- **A large file split** (`app/`, `router.tsx`, `listParams.ts`, one file per UI state) was trimmed to the files
+  that are needed now.
+- **Patching the plan instead of rewriting it** produced contradictory instructions. The final plan was rewritten
+  as a single authoritative scope.
+
+### Decisions
+
+- **ESLint:** the project uses ESLint 10.11. Checked on npm: `eslint-config-airbnb` 19.0.4 supports ESLint 7/8 only,
+  `eslint-config-airbnb-extended` 3.3.0 supports ESLint ^9, and `eslint-plugin-jsx-a11y` 6.10.2 and
+  `eslint-plugin-react` 7.37.5 declare peers up to ESLint 9. The adopted setup is typescript-eslint
+  `strictTypeChecked` (type-aware), react-hooks, `eslint-plugin-jsx-a11y-x` 0.2.0 (peer ESLint 9/10), and
+  13 essential non-formatting Airbnb rules. One narrow option was added: `restrict-template-expressions`
+  allows numbers. React and TanStack lint plugins were deferred, as the developer allowed.
+- **Gate before relying on jsx-a11y-x:** ESLint ran on a temporary file containing `<img>` without `alt` and
+  `<div onClick>`. It reported `alt-text`, `click-events-have-key-events` and `no-static-element-interactions`,
+  and the file was then deleted.
+- **`RequireAuth` instead of the library's `useAutoSignin`.** The library hook calls the module-internal `useAuth`,
+  so tests can't mock it at the `useAuth` boundary. The custom guard is about 15 lines. It redirects only when
+  there are no callback params, no loading, no active navigator and no error, and only once per mount (a ref
+  guard). The guard is re-armed after a successful authentication, so a later session loss (for example a failed
+  silent renewal) redirects once more.
+- **Cache:** `queryClient.clear()` runs before `signoutRedirect()`, and an effect in `App.tsx` clears the cache when
+  `user.profile.sub` changes. Private routes render only once `isAuthenticated` is true.
+- **The header username comes from the ID token's `preferred_username` claim** instead of an `/api/me` call.
+  `HomePage` and its tests were removed, and their states moved into `RequireAuth`.
+- **Testing:** Vitest runs without globals, so Testing Library's automatic cleanup was not registered.
+  `setupTests.ts` now calls `afterEach(cleanup)`. Without it, the new multi-test files failed with duplicate elements.
+
+### Verification performed
+
+| Check | Result |
+|---|---|
+| `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` | all pass; **11 tests** in 2 files (RequireAuth 5, App routing and cache 6) |
+| Mutation check | with the ref guard removed, the StrictMode test fails with "called 2 times"; restored afterwards |
+| `docker compose up --build -d frontend` | all 4 services healthy; `/signed-out` served (200) |
+| Chrome: anonymous `/boats` | **PASS**: exactly one redirect to Keycloak (`boat-frontend`, PKCE S256, `redirect_uri=/`) |
+| Chrome: login `demo/demo` | **PASS**: back on `/boats` with no query string, token exchange 200, "Signed in as demo", no console messages |
+| Chrome: `/` → `/boats` | **PASS** after reload (see the finding below) |
+| Chrome: refresh | **PASS**: session restored on `/boats` |
+| Chrome: logout | **PASS (scripted click)**: Keycloak logout with `post_logout_redirect_uri=/signed-out` 200 → `/signed-out`, user removed from sessionStorage, no automatic re-login |
+| Chrome: Sign in again | **PASS (scripted click and form submit)**: Keycloak showed the login form (the SSO session had really ended); after login, back on `/boats` with no query string |
+| Layout | desktop screenshot; phone width approximated with a 390 px same-origin iframe (Chrome would not resize the window below 1200 px): header wraps, no horizontal overflow |
+
+### Problems found
+
+- **Browser tool input stopped working mid-session.** After the first login, the extension's mouse clicks and key
+  presses never reached the page: capture-phase listeners recorded no `pointerdown`, `mousedown`, `click` or
+  `keydown` events, on both localhost:3000 and Keycloak. Synthetic events were recorded. The React handlers were
+  attached and the buttons were the topmost elements. The remaining steps were completed with scripted
+  `button.click()` and `form.requestSubmit()`, which run the same handlers but are not trusted user input.
+  Logout and re-login with real input are therefore **not verified** in this session.
+- **Stale `index.html` after a redeploy (not fixed).** Navigating to `/` served a heuristically cached old
+  `index.html` that loaded the previous bundle (old HomePage). nginx sends `index.html` with `Last-Modified`/`ETag`
+  but no `Cache-Control`. Missing `/assets/*` files also fall back to `index.html` with 200. A fix would be
+  `Cache-Control: no-cache` for `index.html`, long-lived caching for hashed assets, and `try_files $uri =404` under
+  `/assets/`. This was reported for a decision, not applied, because it is outside the 3A.1 scope.
+
+### Limitations
+
+- No axe checks yet (planned for 3A.3). Contrast was chosen from token values, not measured in the browser.
+- CI has not run these commits (not pushed).

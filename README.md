@@ -3,10 +3,12 @@
 A small boat management application: Spring Boot 3.5 (Java 21) REST API, React + TypeScript SPA, PostgreSQL,
 and Keycloak for OIDC login (Authorization Code + PKCE).
 
-> Status: the backend REST API (boat CRUD, paginated listing and search) is complete. The frontend boat
-> management UI is not implemented yet.
+> Status: the backend REST API (boat CRUD, paginated listing and search) is complete. The frontend has automatic
+> login, logout to a public signed-out page and the app layout. The boat list, search and details come next
+> (iteration 3A.2/3A.3), followed by create, edit and delete (3B).
 
 API reference, authentication details and backend development notes: [backend/README.md](backend/README.md).
+Frontend routes, structure and commands: [frontend/README.md](frontend/README.md).
 
 ## Quick start
 
@@ -22,7 +24,7 @@ docker compose up --build
 | Keycloak (admin console) | http://localhost:8081 (`admin` / `admin`) |
 | Backend health | http://localhost:8080/actuator/health |
 
-Log in with the demo user **`demo` / `demo`**.
+Opening the app redirects to Keycloak. Log in with the demo user **`demo` / `demo`**.
 
 These credentials are for local development only. To change the database or Keycloak admin credentials,
 copy `.env.example` to `.env` and edit it. `.env` is git-ignored.
