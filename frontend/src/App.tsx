@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { useAuth } from 'react-oidc-context'
 import { Navigate, Route, Routes } from 'react-router'
 import { RequireAuth } from './auth/RequireAuth'
@@ -8,22 +8,22 @@ import { Layout } from './components/Layout'
 import { BoatsPage } from './features/boats/BoatsPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 
-/** Drops cached server data whenever the signed-in identity changes or the session ends. */
-function useClearCacheOnIdentityChange() {
+/**
+ * Drops cached data of any other identity when the signed-in subject changes or the session ends.
+ * User data is keyed `[feature, subject, ...]`, so the current user's queries, including ones already
+ * in flight while the session is being restored, are never removed (clear() would strand them).
+ */
+function useDropOtherUsersCache() {
   const queryClient = useQueryClient()
   const subject = useAuth().user?.profile.sub
-  const previous = useRef(subject)
 
   useEffect(() => {
-    if (previous.current !== subject) {
-      previous.current = subject
-      queryClient.clear()
-    }
+    queryClient.removeQueries({ predicate: (query) => query.queryKey[1] !== subject })
   }, [queryClient, subject])
 }
 
 export default function App() {
-  useClearCacheOnIdentityChange()
+  useDropOtherUsersCache()
 
   return (
     <Routes>

@@ -8,7 +8,8 @@ import { mockAuth, mockSignedIn, signinRedirect, signoutRedirect } from './test/
 
 vi.mock('react-oidc-context', () => ({ useAuth: vi.fn(), hasAuthParams: vi.fn() }))
 
-const privateKey = ['boats', 'list']
+// User data is keyed by the subject at index 1 (see CLAUDE.md).
+const privateKey = ['boats', 'user-1', 'list']
 
 function renderApp(path: string, queryClient = new QueryClient()) {
   const tree = () => (
@@ -93,6 +94,31 @@ describe('App routing', () => {
     mockSignedIn({ profile: { sub: 'user-2', preferred_username: 'other' } })
     rerenderApp()
     expect(queryClient.getQueryData(privateKey)).toBeUndefined()
+  })
+
+  it('loads the fleet when the session is restored after the first render', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          Response.json({
+            ...emptyFleet,
+            content: [
+              { id: 'b1', name: 'Restored', description: null, createdAt: '2026-10-13T13:43:07Z' },
+            ],
+            totalElements: 1,
+            totalPages: 1,
+          }),
+        ),
+      ),
+    )
+    mockAuth({ isLoading: true })
+    const { rerenderApp } = renderApp('/boats')
+
+    // oidc-client-ts restores the user from sessionStorage asynchronously: no subject, then a subject.
+    mockSignedIn()
+    rerenderApp()
+    expect(await screen.findByText('Restored')).toBeInTheDocument()
   })
 
   it('keeps the cache while the identity is unchanged', () => {
