@@ -1697,3 +1697,181 @@ Do not push or merge automatically.
   conformance.
 - After "Back to fleet", focus goes to `<main>`, not to the card that was opened.
 - CI has not run these commits (not pushed).
+
+## CI — split into path-filtered backend and frontend workflows (2026-10-14)
+
+### Prompt 1 (verbatim, review request)
+
+```text
+Review and optimize our existing GitHub Actions CI to avoid running unrelated checks.
+
+We have a monorepo with `backend/`, `frontend/`, Docker Compose and shared configuration files.
+
+**Goal:** Backend checks should run only when backend-related files change, and frontend checks only when frontend-related files change.
+
+Requirements:
+
+1. Inspect the existing `.github/workflows/` files before proposing changes. Preserve the current quality gates (formatting, lint, tests, builds, Docker checks).
+2. Use a reliable path-based change detection strategy compatible with pull requests and pushes.
+3. Run backend checks when `backend/**` or relevant shared/backend build configuration changes.
+4. Run frontend checks when `frontend/**` or relevant shared/frontend build configuration changes.
+5. If both areas change, run both sets of checks.
+6. If only documentation changes, avoid unnecessary builds and tests.
+7. Handle workflow configuration changes and relevant shared files conservatively, so important checks aren't accidentally skipped.
+8. Preserve reliable branch protection: required checks must not remain permanently Pending when a job is skipped.
+9. Keep least-privilege GitHub Actions permissions and existing caching where appropriate.
+10. Do not weaken or remove any existing test or build commands.
+
+Prefer a simple solution using one lightweight change-detection job and conditional backend/frontend jobs. Avoid unnecessary third-party Actions and complexity.
+
+Include a small verification matrix covering:
+- Backend-only changes
+- Frontend-only changes
+- Changes to both
+- Documentation-only changes
+- CI workflow changes
+- Docker Compose or shared configuration changes
+
+First explain the proposed approach and identify any branch-protection implications. Do not modify files until the plan is approved.
+```
+
+### Prompt 2 (verbatim, approval of the first approach)
+
+```text
+I approve the proposed path-based CI optimization with two requirements.
+
+1. Make `CI result` the intended single required branch-protection check.
+
+The final gate must always run and must:
+- Fail if change detection fails or is cancelled.
+- Fail if a required backend, frontend or Docker check fails or is cancelled.
+- Fail if a component was marked as changed but its corresponding check was unexpectedly skipped.
+- Accept skipped checks only for components that do not require validation.
+- Pass for documentation-only changes when all relevant jobs were legitimately skipped.
+
+Do not update GitHub branch protection automatically. I will configure the required check after verifying the workflow on GitHub.
+
+2. Verify Git diff correctness.
+
+- For pull requests, compare against the merge-base of the base branch.
+- For pushes, compare the event's before and after commits.
+- Handle missing history, new branches and unusual Git states conservatively by running all checks.
+- Detect both old and new paths for renamed files.
+
+I approve running all checks for shared configuration, Docker Compose, Keycloak and workflow changes.
+
+Preserve all existing build/test commands and caching.
+
+Implement the change, run local classification tests and validate the workflow syntax if a compatible validator is available.
+
+Update CLAUDE.md and AI_USAGE.md, commit locally, and stop.
+
+Do not push or merge automatically.
+```
+
+### Prompt 3 (verbatim, change of direction)
+
+```text
+Stop the current Bash-based CI change detection implementation.
+
+I want a simpler, declarative GitHub Actions solution, similar to the approach used in my previous projects.
+
+Instead of a custom Git diff classifier and a complex CI result gate, use native GitHub Actions `paths` filters.
+
+Target architecture:
+- `.github/workflows/backend.yml`
+- `.github/workflows/frontend.yml`
+
+Requirements:
+
+1. Split the existing CI into two independent workflows.
+2. Use native `push.paths` and `pull_request.paths` filtering to trigger only relevant workflows.
+3. Include each workflow's own YAML file and relevant shared configuration files in its paths.
+4. Preserve the existing backend and frontend quality gates, caching and Docker image builds.
+5. Keep `workflow_dispatch` for manual full execution.
+6. Keep permissions minimal.
+7. Use explicit paths instead of Bash scripts, custom change classifiers or third-party change detection actions.
+8. Avoid reusable workflows for now; there is not enough duplication to justify them.
+9. Consider documentation exclusions carefully. In particular, frontend/README.md must still trigger frontend checks if it is covered by Prettier.
+10. Document the GitHub branch-protection limitation: path-filtered workflows can leave required checks Pending if skipped.
+
+Before implementation, explain the precise implications for our existing main branch protection. Do not modify branch protection automatically.
+
+Remove any uncommitted code from the previous Bash-based approach only after inspecting the diff. Preserve unrelated changes.
+
+Then implement, validate the workflows, update documentation and commit locally. Do not push or merge automatically.
+```
+
+### Prompt 4 (verbatim, approval and history cleanup)
+
+```text
+The declarative CI implementation is approved.
+
+Before pushing, please make two final adjustments:
+
+1. Clean up the local Git history safely. Since none of these commits have been pushed, remove the experimental Bash-based commit and its revert from the branch history, keeping only the final declarative workflow implementation and documentation. Preserve any existing unrelated commits. Do not force-push or change main. Keep the AI_USAGE.md explanation of why the initial approach was abandoned.
+
+2. Verify that both workflows still have their original quality gates and Docker image builds, and that actionlint passes.
+
+Do not add custom Bash change-detection scripts or placeholder workflows.
+
+Keep the current path filters. We may add a separate lightweight Docker Compose configuration check during final hardening.
+
+Do not modify GitHub branch protection.
+
+Stop and report the cleaned commit history and verification results. Do not push automatically.
+```
+
+### What happened
+
+1. **First approach, implemented and then abandoned.** One `Detect changes` job ran a Bash classifier: merge-base
+   diff for PRs, before..after for pushes, `--no-renames`, and "run everything" when anything was uncertain. The
+   backend, frontend and Docker jobs ran conditionally, and an always-running `CI result` gate made skipped jobs
+   safe for branch protection. It had 38 local script tests (macOS bash 3.2 and Linux bash 5.2), two mutation
+   checks, and clean `actionlint`/`shellcheck` runs. It was committed locally and never pushed.
+2. **The developer rejected it as too complex** for the project: three scripts, a gate job and a test harness to
+   save CI minutes. They asked for the declarative approach used in their earlier projects instead. The AI had
+   proposed the scripted design in response to Prompt 1's requirement 8 (no permanently Pending required checks),
+   which native path filters can't meet. Prompt 3 accepts that trade-off explicitly and documents it.
+3. **No uncommitted work existed:** the working tree was clean, and the Bash commit was the only one on the
+   branch. It was first undone with `git revert`. Before pushing, the developer asked for a clean history. None of
+   the commits had been pushed, so the experimental commit and its revert were squashed away (`git reset --soft
+   main` plus one new commit, with a local backup branch kept). The branch now holds only the declarative
+   implementation. This log is the record of the abandoned approach.
+
+### Decisions
+
+- **Two workflows**, `backend.yml` and `frontend.yml`, each triggered on `push` to `main` and `pull_request`
+  with identical `paths` lists, plus `workflow_dispatch`. YAML anchors were avoided: GitHub's support for them
+  is recent, and explicit lists were requested.
+  - **backend:** `backend/**`, `!backend/**.md` (Spotless formats Java only), and `.github/workflows/backend.yml`.
+  - **frontend:** `frontend/**` (no Markdown exclusion: `prettier --check .` checks `frontend/README.md`),
+    `.editorconfig` (Prettier reads it), and `.github/workflows/frontend.yml`.
+  - `docker-compose.yml`, `keycloak/`, `.env.example` and root docs trigger neither workflow: no CI command reads
+    them, so running unrelated checks would validate nothing.
+- **Unchanged:** all build and test commands, `contents: read` permissions, Maven, npm and Docker layer caching
+  (the cache scopes are still `backend`/`frontend`, so existing caches stay valid), and the job and check names.
+  The Docker jobs are named "Docker images (backend)" and "Docker images (frontend)", exactly like the former
+  matrix legs.
+- **Concurrency** is now per workflow (`${{ github.workflow }}-${{ github.ref }}`), so a backend run doesn't cancel
+  a frontend run.
+- **Branch protection (not changed by the AI; `gh` is not installed, so the current settings are unknown):** a
+  path-skipped workflow reports no checks. A required check from it would stay "Expected — Waiting for status to
+  be reported", and a docs-only PR would block on every required check. The options were explained to the
+  developer: don't require these checks; require them and bypass for unrelated PRs; or add placeholder workflows
+  with the same job names (not implemented).
+
+### Verification performed (local)
+
+| Check | Result |
+|---|---|
+| `actionlint` 1.7.7 (local image) | 0 errors in `backend.yml` and `frontend.yml` |
+| Commands and caching against the old `ci.yml` | every `run`, `uses`, setup and cache line is still present; the only difference is matrix values written out (same cache scopes) |
+| `push` paths equal `pull_request` paths | yes, for both workflows (checked by script) |
+| Path matrix: a **local emulation** of GitHub's documented filter rules (`*` does not cross `/`, `**` does, `!` excludes, last match wins), reading the patterns from the YAML | backend only → Backend; frontend only, `frontend/README.md`, `nginx.conf`/Dockerfile → Frontend; both → both; root docs or `backend/README.md` only → neither; `backend.yml` → Backend; `frontend.yml` → Frontend; `.editorconfig` → Frontend; Compose, Keycloak, `.env.example` → neither |
+
+### Not yet verified
+
+- Real GitHub behavior. The emulation is not GitHub's matcher. After pushing, check a docs-only PR (no workflow
+  runs), a frontend-only PR (only Frontend), and a PR changing `backend/README.md` (no Backend).
+- CI has not run these commits (not pushed).

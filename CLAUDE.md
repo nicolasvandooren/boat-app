@@ -105,6 +105,22 @@ A small boat management app built for a time-boxed technical challenge. Prioriti
 Persistence tests use Testcontainers (`postgres:17.9-alpine`, same image as compose), so Docker must be running.
 Tests that deliberately violate a DB constraint must end at the failing flush (PostgreSQL aborts the transaction).
 
+## CI (`.github/workflows/backend.yml`, `frontend.yml`)
+
+- Two independent workflows, triggered by native `paths` filters on `push` (to `main`) and `pull_request`, plus
+  `workflow_dispatch` for a manual full run. Keep the `push` and `pull_request` path lists identical.
+- Paths list exactly what each workflow's commands read:
+  - backend: `backend/**` except `backend/**.md`, plus its own workflow file
+  - frontend: `frontend/**`, including Markdown (Prettier checks it), `.editorconfig` (Prettier reads it), plus its
+    own workflow file
+  - When a check starts reading a new file outside these paths, add the file to the workflow's paths.
+- `docker-compose.yml`, `keycloak/`, `.env.example` and root docs trigger no workflow: no CI command validates them.
+- **Branch protection:** a workflow skipped by its path filter reports no checks. A required check from it then
+  stays "Expected — Waiting for status to be reported", and a docs-only PR blocks on every required check. Don't
+  make these checks required unless bypassing for unrelated PRs is acceptable. Check names: "Backend (format,
+  test, build)", "Docker images (backend)", "Frontend (format, lint, test, build)", "Docker images (frontend)".
+- No custom change-detection scripts and no third-party path-filter actions (a deliberate choice; see `AI_USAGE.md`).
+
 ## Definition of done / acceptance criteria
 
 A change is done only when it was **executed and verified**, not just written:
@@ -116,5 +132,5 @@ A change is done only when it was **executed and verified**, not just written:
 5. REST API returns proper status codes (200/201/204/400/401/404) with `ProblemDetail` bodies, and rejects
    unauthenticated requests.
 6. `docker compose up --build` from a clean checkout starts everything healthy.
-7. CI is green: formatting, tests, application builds, Docker image builds.
+7. CI is green for every workflow the change triggers: formatting, tests, application builds, Docker image builds.
 8. `README.md` and `AI_USAGE.md` are updated in the same change that alters behavior or decisions.
