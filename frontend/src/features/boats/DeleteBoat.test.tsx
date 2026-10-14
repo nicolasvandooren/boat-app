@@ -134,7 +134,7 @@ describe('DeleteBoat', () => {
 
     expect(queryClient.getQueryData(['boats', 'user-1', 'detail', pearl.id])).toBeUndefined()
     // The fleet shown after deleting refetches this user's (invalidated) list: the boat is gone.
-    expect(await screen.findByText(/Your fleet is empty/)).toBeInTheDocument()
+    expect(await screen.findByText(/The fleet is empty/)).toBeInTheDocument()
     expect(queryClient.getQueryData(ownList)).toEqual(fleet([]))
     expect(requests().slice(requests().indexOf(deleteRequest))).toContain(
       'GET /api/boats?page=0&size=10',

@@ -2166,3 +2166,75 @@ Implement directly after inspecting the existing code. No extensive planning cyc
 - If the deleted boat was the only item on the last fleet page, the user returns to a page past the end. The
   fleet then shows its existing "This page does not exist" state with a link to the first page.
 - CI has not run these commits (not pushed).
+
+## Release hardening — review findings P2-1, P2-2, P2-3 (2026-10-14)
+
+### Prompt 1 (summary, sent in plan mode)
+
+The developer asked for an independent, read-only Senior/Staff-level review of the whole repository before
+delivery. It covered backend, security, OIDC, React/TanStack Query, the API client, accessibility, Docker/nginx/CI,
+tests, docs and secrets. Each finding needed a severity (P0–P3), file and lines, a failure scenario, evidence, the
+smallest fix and a note on whether a regression test is needed. The review had to separate verified defects,
+plausible risks and optional improvements, and avoid speculation and refactoring.
+
+### Review result
+
+No P0/P1 findings. Three P2 findings, plus P3 items that were deferred:
+
+- **P2-1 (verified defect):** a failed background refetch unmounted the edit form and discarded unsaved input.
+  The cause is that TanStack Query keeps `data` and sets `error` on a failed refetch (checked in
+  `query-core/build/modern/query.js`), and the pages checked `error` before `data`.
+- **P2-2 (plausible security risk):** Compose published 3000/8080/8081 on all interfaces, so the Keycloak
+  admin console (`admin`/`admin`) was reachable from the LAN.
+- **P2-3 (documentation/model gap):** all authenticated users share one fleet, which was undocumented, and the
+  UI copy ("Your fleet is empty", "manage your boats") implied per-user data.
+- **Deferred P3s:** spurious 401 after laptop resume (focus refetch before the 5 s oidc renewal poll), a 500
+  instead of 404 on a concurrent update/delete, success notices replaying from history state, whitespace-only
+  descriptions, nginx caching the backend IP, and no CSP.
+
+### Prompt 2 (summary, approval)
+
+Implement only P2-1, P2-2 and P2-3 on `vandoo/chore/release-hardening`:
+
+- P2-1: keep `EditForm` mounted when cached data exists, apply the same to the detail page, and don't hide the
+  failure. Add a regression test for a failed refetch after unsaved edits that checks the values survive and
+  saving works after recovery.
+- P2-2: bind the frontend, backend and Keycloak ports to 127.0.0.1, verify localhost login and the proxy, and
+  document that the credentials are local-only.
+- P2-3: document the shared fleet in README, backend README and this file, with no migration and no new
+  authorization model, and fix the misleading copy.
+- No P3s. Run the checks, rebuild Compose, verify in a real browser, and don't push.
+
+### Decisions
+
+- **Data first, error alongside.** `EditLoader` and `BoatDetail` render cached data whenever it exists. A refetch
+  error then shows `LoadError` with a new `stale` flag above it: "Could not refresh this boat; the last loaded
+  version is shown." with Retry. A 404 adds "It may have been deleted.", and a 401 keeps the existing "Your
+  session has expired." with "Sign in again". Focus is not moved, so typing is not interrupted, and the alert
+  role announces it. The error-only states (no data yet) are unchanged. On save, a 404 is still reported by
+  `BoatForm`. The rule is now in `CLAUDE.md`.
+- **Loopback ports.** `127.0.0.1:` prefixes on the three published ports. Internal traffic
+  (`backend:8080`, `keycloak:8080`, `postgres:5432`) is unaffected.
+- **Shared fleet documented, not changed.** Notes went into README ("Authorization model"), backend README
+  (Authentication plus Known trade-offs) and here. The copy changed to "The fleet is empty", "Add the first
+  boat", "Go to the fleet" and "manage the fleet".
+
+### Verification performed
+
+| Check | Result |
+|---|---|
+| New tests on the **old** code | all 3 fail (edit 500, edit 401, detail 404) |
+| Frontend `format:check`, `lint`, `test`, `build` | all pass; **95 tests** in 10 files |
+| `docker compose up --build --wait` | all four services healthy; ports shown as `127.0.0.1:3000/8080/8081` |
+| Loopback vs LAN (curl) | `localhost:3000` 200, `:8080` 401, `:8081` 302; the same ports on the LAN IP were refused; `/api` via nginx 401; backend → `keycloak:8080` JWKS 200; discovery issuer `http://localhost:8081/realms/boatapp` |
+| Chrome: login | `/` → Keycloak (PKCE S256) → `demo` login → `/boats` with 24 boats |
+| Chrome: P2-1 journey | created `[dev] Hardening Refetch`, opened Edit, appended text to both fields, `docker compose stop backend`, waited past `staleTime`, switched tabs and back. The focus refetch got three 502s (1 + 2 retries), and the alert appeared above the form with the typed values intact. After restarting the backend: Retry → GET 200, alert gone, values intact; Save → PUT 200, "Changes saved." with the new values; no console errors |
+| Chrome: cleanup and logout | deleted the test boat (inline confirmation, back to 24 boats); Log out → `/signed-out` with "Sign in again to manage the fleet." |
+
+### Limitations
+
+- After a successful Retry, the Retry button unmounts and focus falls back to the document body. This is a
+  minor keyboard nit, left as is.
+- The stale alert sits above the edit page's `h1`, because the heading belongs to `EditForm`.
+- The P3 findings are not implemented.
+- CI has not run these commits (not pushed).

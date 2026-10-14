@@ -35,6 +35,14 @@ so the app, the API and the Keycloak admin console are not reachable from other 
 the app as `http://localhost:3000`, the origin registered in Keycloak. The Keycloak realm is re-imported from
 `keycloak/realm-boatapp.json` on every start.
 
+## Authorization model: one shared fleet
+
+Every authenticated user of the `boatapp` realm works on **the same fleet** and can list, view, create, edit
+and delete **all** boats. There is no per-user ownership of boats and no role-based authorization: a valid
+access token (correct issuer and `boat-api` audience) is the only requirement. This is a deliberate scope
+decision for the challenge. Per-user fleets would need an owner column and a filter on every query. The realm
+ships one user (`demo`), and self-registration is disabled.
+
 ## How the pieces fit together
 
 ```

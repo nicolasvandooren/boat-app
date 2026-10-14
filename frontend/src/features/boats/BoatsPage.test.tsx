@@ -140,9 +140,9 @@ describe('BoatsPage', () => {
   it('shows an empty fleet', async () => {
     serveBoats(() => json(pageOf([])))
     renderPage()
-    expect(await screen.findByText(/Your fleet is empty/)).toBeInTheDocument()
+    expect(await screen.findByText(/The fleet is empty/)).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('0 boats')
-    expect(screen.getByRole('link', { name: 'Add your first boat' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Add the first boat' })).toHaveAttribute(
       'href',
       '/boats/new',
     )
@@ -330,7 +330,7 @@ describe('BoatsPage', () => {
 
     serveBoats(() => json(pageOf([])))
     const empty = renderPage()
-    await screen.findByText(/Your fleet is empty/)
+    await screen.findByText(/The fleet is empty/)
     expect(await axeViolations(empty.container)).toEqual([])
   })
 })

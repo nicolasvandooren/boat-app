@@ -9,7 +9,7 @@ export function SignedOutPage() {
     return (
       <section>
         <h1>You are signed in</h1>
-        <Link to="/boats">Go to your fleet</Link>
+        <Link to="/boats">Go to the fleet</Link>
       </section>
     )
   }
@@ -17,7 +17,7 @@ export function SignedOutPage() {
   return (
     <section>
       <h1>You have been signed out</h1>
-      <p>Your session has ended. Sign in again to manage your boats.</p>
+      <p>Your session has ended. Sign in again to manage the fleet.</p>
       <button type="button" onClick={() => void auth.signinRedirect()}>
         Sign in again
       </button>
