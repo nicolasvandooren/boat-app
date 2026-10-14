@@ -4,7 +4,7 @@ import { useDocumentTitle } from '../../components/useDocumentTitle'
 import { BoatSearch } from './BoatSearch'
 import { LoadError } from './LoadError'
 import { parseListParams, useBoats } from './api'
-import type { BoatNavState } from './navigation'
+import { deletedNameFrom, noticeFrom, type BoatNavState } from './navigation'
 import type { Boat, BoatPage } from './types'
 import styles from './BoatsPage.module.css'
 
@@ -84,6 +84,8 @@ export function BoatsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
   const newBoatState: BoatNavState = { listSearch: location.search }
+  const deleted = noticeFrom(location.state) === 'deleted'
+  const deletedName = deletedNameFrom(location.state)
   useDocumentTitle('Fleet overview')
   const { page, search } = parseListParams(searchParams)
   const { data, error, isPending, isPlaceholderData, refetch } = useBoats({ page, search })
@@ -186,6 +188,12 @@ export function BoatsPage() {
         </div>
         <BoatSearch search={search} onSearch={updateSearch} />
       </div>
+      {deleted && (
+        // Focused after navigation (see Layout), so the confirmation is read out first.
+        <p role="status" className={styles.success} tabIndex={-1} data-focus-on-navigate>
+          {deletedName ? `“${deletedName}” was deleted.` : 'Boat deleted.'}
+        </p>
+      )}
       {/* Always rendered, so screen readers announce changes in the result count. */}
       <p role="status" className={styles.summary}>
         {summary(data, isPending && !error, search)}

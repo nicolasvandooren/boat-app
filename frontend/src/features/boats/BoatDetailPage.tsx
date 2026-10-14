@@ -3,7 +3,14 @@ import { ApiError } from '../../api/client'
 import { useDocumentTitle } from '../../components/useDocumentTitle'
 import { LoadError } from './LoadError'
 import { isBoatId, useBoat } from './api'
-import { backToFleet, listSearchFrom, noticeFrom, type BoatNavState } from './navigation'
+import { DeleteBoat } from './DeleteBoat'
+import {
+  backToFleet,
+  listSearchFrom,
+  noticeFrom,
+  type BoatNavState,
+  type BoatNotice,
+} from './navigation'
 import styles from './BoatDetailPage.module.css'
 import listStyles from './BoatsPage.module.css'
 
@@ -20,7 +27,10 @@ export function BoatNotFound() {
   )
 }
 
-const NOTICES = { created: 'Boat added.', saved: 'Changes saved.' }
+const NOTICES: Partial<Record<BoatNotice, string>> = {
+  created: 'Boat added.',
+  saved: 'Changes saved.',
+}
 
 function BoatDetail({ id, navState }: { id: string; navState: BoatNavState }) {
   const { data: boat, error, refetch } = useBoat(id)
@@ -47,7 +57,7 @@ function BoatDetail({ id, navState }: { id: string; navState: BoatNavState }) {
 
   return (
     <>
-      {navState.notice && (
+      {navState.notice && NOTICES[navState.notice] && (
         // Focused after navigation (see Layout), so the confirmation is read out first.
         <p role="status" className={styles.notice} tabIndex={-1} data-focus-on-navigate>
           {NOTICES[navState.notice]}
@@ -82,6 +92,9 @@ function BoatDetail({ id, navState }: { id: string; navState: BoatNavState }) {
             </dd>
           </div>
         </dl>
+        <div className={styles.dangerZone}>
+          <DeleteBoat boat={boat} listSearch={navState.listSearch ?? ''} />
+        </div>
       </article>
     </>
   )
