@@ -3,7 +3,10 @@
 A small boat management application: Spring Boot 3.5 (Java 21) REST API, React + TypeScript SPA, PostgreSQL,
 and Keycloak for OIDC login (Authorization Code + PKCE).
 
-> Status: iteration 1. Infrastructure, authentication and CI are in place; boat management is not implemented yet.
+> Status: the backend REST API (boat CRUD, paginated listing and search) is complete. The frontend boat
+> management UI is not implemented yet.
+
+API reference, authentication details and backend development notes: [backend/README.md](backend/README.md).
 
 ## Quick start
 
@@ -39,11 +42,16 @@ the `boat-api` audience, and fetches signing keys over the internal Docker netwo
 
 ## Local development
 
-```bash
-# infrastructure only
-docker compose up -d postgres keycloak
+The Compose PostgreSQL is not published to the host, so a backend running outside Docker needs its own database.
+See [backend/README.md](backend/README.md#local-development) for details.
 
-# backend (needs JDK 21)
+```bash
+# Keycloak from Compose, plus a standalone PostgreSQL on localhost:5432
+docker compose up -d keycloak
+docker run -d --name boatapp-dev-db -p 5432:5432 \
+  -e POSTGRES_DB=boatapp -e POSTGRES_USER=boatapp -e POSTGRES_PASSWORD=boatapp postgres:17.9-alpine
+
+# backend on :8080 (needs JDK 21)
 cd backend && ./mvnw spring-boot:run
 
 # frontend (http://localhost:5173, proxies /api to localhost:8080)

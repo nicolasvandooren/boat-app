@@ -50,6 +50,10 @@ A small boat management app built for a time-boxed technical challenge. Prioriti
 - Secrets never go in the repo. The demo user (`demo`/`demo`) and default admin/DB passwords are
   **local development only** and live in `keycloak/realm-boatapp.json` / `.env.example`.
 - Small, focused commits. Never push without asking.
+- Any API contract change (endpoints, request/response fields, status codes, validation rules, error format)
+  must update `backend/README.md` in the same iteration.
+- Planning phases must not modify project files unless explicitly authorized. Only the plan itself may be
+  written; implementation starts after the plan is approved.
 
 ## Commands
 

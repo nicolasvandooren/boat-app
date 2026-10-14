@@ -1,6 +1,8 @@
 package com.boatapp.boat;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import java.net.URI;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -11,6 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -21,6 +24,15 @@ public class BoatController {
 
   public BoatController(BoatService service) {
     this.service = service;
+  }
+
+  /** Constraint violations are reported by Spring MVC's built-in method validation as 400. */
+  @GetMapping
+  public BoatPageResponse list(
+      @RequestParam(defaultValue = "0") @Min(0) int page,
+      @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size,
+      @RequestParam(required = false) String search) {
+    return service.list(page, size, search);
   }
 
   @GetMapping("/{id}")

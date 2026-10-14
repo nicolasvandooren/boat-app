@@ -24,8 +24,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.boatapp.config.SecurityConfig;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -215,6 +218,99 @@ class BoatControllerTest {
         .doesNotContainIgnoringCase("postgres")
         .doesNotContainIgnoringCase("hibernate")
         .doesNotContainIgnoringCase("jdbc");
+    verifyNoInteractions(service);
+  }
+
+  @Test
+  void listUsesDefaultsAndReturnsExplicitPageContract() throws Exception {
+    given(service.list(0, 10, null)).willReturn(new BoatPageResponse(List.of(BOAT), 0, 10, 1, 1));
+
+    mvc.perform(authenticated(get("/api/boats")))
+        .andExpect(status().isOk())
+        .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+        .andExpect(jsonPath("$", aMapWithSize(5)))
+        .andExpect(jsonPath("$.content[0].id").value(ID.toString()))
+        .andExpect(jsonPath("$.content[0].name").value("Nautilus"))
+        .andExpect(jsonPath("$.page").value(0))
+        .andExpect(jsonPath("$.size").value(10))
+        .andExpect(jsonPath("$.totalElements").value(1))
+        .andExpect(jsonPath("$.totalPages").value(1));
+  }
+
+  @Test
+  void listPassesPageSizeAndSearchToService() throws Exception {
+    given(service.list(2, 100, "pearl")).willReturn(new BoatPageResponse(List.of(), 2, 100, 0, 0));
+
+    mvc.perform(authenticated(get("/api/boats?page=2&size=100&search=pearl")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content", hasSize(0)))
+        .andExpect(jsonPath("$.page").value(2));
+    verify(service).list(2, 100, "pearl");
+  }
+
+  @ParameterizedTest
+  @CsvSource({"page=-1, page", "size=0, size", "size=-5, size", "size=101, size"})
+  void listRejectsOutOfRangeParametersWith400(String query, String field) throws Exception {
+    mvc.perform(authenticated(get("/api/boats?" + query)))
+        .andExpect(status().isBadRequest())
+        .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+        .andExpect(jsonPath("$.title").value("Validation failed"))
+        .andExpect(jsonPath("$.detail").value("One or more fields are invalid."))
+        .andExpect(jsonPath("$.errors", hasSize(1)))
+        .andExpect(jsonPath("$.errors[0].field").value(field))
+        .andExpect(jsonPath("$.errors[0].message").isNotEmpty());
+    verifyNoInteractions(service);
+  }
+
+  @ParameterizedTest
+  @CsvSource({"page=S3CR3T-abc, page", "size=99999999999, size"})
+  void listRejectsUnparseableParametersWithoutEchoingThem(String query, String field)
+      throws Exception {
+    String submitted = query.substring(query.indexOf('=') + 1);
+
+    String body =
+        mvc.perform(authenticated(get("/api/boats?" + query)))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.title").value("Validation failed"))
+            .andExpect(jsonPath("$.errors[0].field").value(field))
+            .andExpect(jsonPath("$.errors[0].message").value("has an invalid format"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    assertThat(body)
+        .doesNotContain(submitted, "Failed to convert", "Exception", "java.", "NumberFormat");
+    verifyNoInteractions(service);
+  }
+
+  @Test
+  void invalidIdReturnsValidationProblemWithoutEchoingIt() throws Exception {
+    String body =
+        mvc.perform(authenticated(get("/api/boats/not-a-uuid")))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.title").value("Validation failed"))
+            .andExpect(jsonPath("$.detail").value("One or more fields are invalid."))
+            .andExpect(jsonPath("$.instance").value("/api/boats/not-a-uuid"))
+            .andExpect(jsonPath("$.errors", hasSize(1)))
+            .andExpect(jsonPath("$.errors[0].field").value("id"))
+            .andExpect(jsonPath("$.errors[0].message").value("has an invalid format"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    // The value appears only in "instance" (the request path the client sent), never in the
+    // detail or the errors.
+    assertThat(body.replace("\"instance\":\"/api/boats/not-a-uuid\"", ""))
+        .doesNotContain("not-a-uuid", "Failed to convert", "UUID", "Exception", "java.");
+    verifyNoInteractions(service);
+  }
+
+  @Test
+  void anonymousListReturns401() throws Exception {
+    mvc.perform(get("/api/boats")).andExpect(status().isUnauthorized());
     verifyNoInteractions(service);
   }
 

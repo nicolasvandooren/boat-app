@@ -415,3 +415,245 @@ Keep this change limited to validation error security testing and report the res
 **Human oversight:** The test requirements and information disclosure risks were reviewed before implementation. No production changes were necessary.
 
 **Limitations:** The test covers field validation errors, not every possible exception or error response.
+
+## Iteration 2C — Paginated listing, search, backend API docs (2026-10-13)
+
+### Prompt 1 (verbatim)
+
+```text
+Implement iteration 2C: paginated boat listing, optional search, and backend API documentation.
+
+Read `CLAUDE.md` and inspect the existing BoatController, BoatService, BoatRepository, DTOs, tests, and migrations before modifying anything.
+
+**Goal:** Complete the backend REST API required by the frontend while preserving all existing CRUD and authentication behavior.
+
+### Scope
+
+1. Implement the authenticated endpoint:
+
+   `GET /api/boats?page=0&size=10&search=`
+
+2. Pagination requirements:
+   - Zero-based page index, default 0.
+   - Default page size 10, maximum 100.
+   - Reject negative page numbers, zero/negative sizes, and sizes above 100 with HTTP 400.
+   - Apply deterministic sorting: `createdAt DESC`, then `id DESC`.
+   - Return HTTP 200 with an empty content array if no results exist.
+
+3. Optional search:
+   - Search boat name or description, case-insensitively.
+   - A missing, empty, or whitespace-only search parameter means no filtering.
+   - Apply filtering at the database level before pagination.
+   - Do not load all boats into memory.
+   - Avoid introducing unnecessary query abstractions or dependencies.
+
+4. Response contract:
+
+   {
+     "content": [BoatResponse],
+     "page": 0,
+     "size": 10,
+     "totalElements": 0,
+     "totalPages": 0
+   }
+
+   Create a small, explicit pagination response DTO. Do not expose Spring Data's Page serialization directly.
+
+5. Extend existing classes:
+   - BoatController
+   - BoatService
+   - BoatRepository
+
+   Add only the DTOs or repository queries genuinely needed.
+
+6. Error handling:
+   - Use the existing ProblemDetail conventions.
+   - Return consistent and useful HTTP 400 responses for invalid pagination parameters.
+   - Do not expose internal exception messages, database information, or submitted sensitive values.
+
+7. Tests:
+   - Default pagination behavior.
+   - Multiple pages and correct pagination metadata.
+   - Deterministic ordering.
+   - Empty result.
+   - Case-insensitive search on name and description.
+   - Search combined with pagination.
+   - Invalid page and size parameters.
+   - Anonymous access returns 401.
+   - Regression tests for existing CRUD operations.
+
+8. Verification:
+   - Run backend formatting and tests with JDK 21.
+   - Verify the endpoint against PostgreSQL through Docker Compose.
+   - Ensure the complete existing test suite still passes.
+   - Report actual commands and results, including anything not verified.
+
+### Documentation
+
+Create `backend/README.md` documenting:
+- Backend architecture and technology choices.
+- Authentication using OAuth2 Bearer JWT, including issuer and audience validation.
+- All REST endpoints, request bodies, responses, and status codes.
+- Pagination and search parameters.
+- Validation rules.
+- ProblemDetail error responses with representative examples.
+- Local development, formatting, and test commands.
+- Known trade-offs, including last-write-wins updates.
+
+Update the root README to link to the backend documentation.
+
+Add a convention to `CLAUDE.md`: any API contract change must update the backend documentation in the same iteration.
+
+Update `AI_USAGE.md` with the actual prompts, decisions, corrections, and verification results.
+
+### Constraints
+
+- Do not modify the frontend.
+- Do not change the existing authentication architecture.
+- Do not implement Swagger/OpenAPI in this iteration.
+- Do not add optimistic locking, new architectural layers, or unnecessary database indexes.
+- Preserve existing CRUD functionality.
+- Keep the implementation small and maintainable.
+- Make meaningful local commits on a feature branch.
+- Do not push or merge automatically.
+
+At the end, provide a concise engineering report with files changed, test results, verified API behavior, architectural decisions, and Git status.
+
+Stop before starting frontend development.
+```
+
+### Prompt 2 (verbatim, after interrupting the AI)
+
+```text
+I want get a plan
+```
+
+### Prompt 3 (verbatim, review of the AI's plan)
+
+```text
+The iteration 2C plan is approved, with the following adjustments:
+
+1. Review the existing uncommitted changes before continuing. Keep them only if they match the approved design. Do not discard work without checking the diff.
+
+2. Add a regression test for the changed type-mismatch error contract, including GET /api/boats/not-a-uuid. Verify HTTP 400, the expected ProblemDetail structure, field "id", and absence of the submitted invalid value.
+
+3. Verify that Spring MVC method parameter validation is correctly handled and that invalid page/size values return HTTP 400, never an unexpected 500.
+
+4. Keep the exception handling narrowly scoped. Do not introduce broad handlers that could hide unexpected server errors.
+
+5. Preserve the existing pagination, search, documentation and verification plan. Prioritize correctness and completing the backend over optional refinements.
+
+6. Add a convention to CLAUDE.md: planning phases must not modify project files unless explicitly authorized.
+
+7. Document the actual decisions and corrections in AI_USAGE.md, including the previously disclosed edits made during planning.
+
+Proceed with implementation, run the tests, make meaningful local commits, and stop before frontend development. Do not push automatically.
+```
+
+### Corrections (process)
+
+- **The AI modified project files before inspecting the code and before any plan was approved.** The prompt
+  said to read `CLAUDE.md` and inspect the existing code first. Instead, the AI started editing
+  `BoatController`, `BoatService` and `BoatRepository`, and created `BoatPageResponse`. The developer rejected a
+  full rewrite of `ApiExceptionHandler` and asked for a plan. The plan disclosed the uncommitted edits. After
+  approval the diff was reviewed against the design and kept, because it matched. The handler was then changed
+  with targeted edits instead of a file rewrite. As a result, `CLAUDE.md` now states that planning phases must not
+  modify project files unless explicitly authorized.
+- **Self-inflicted compile error:** a scripted replacement of `java.util.List` with `List` in `BoatServiceTest` also
+  rewrote the import line to `import List;`. Spotless caught it and the import was fixed.
+
+### Decisions
+
+- **Parameter validation**: `@Min(0) page`, `@Min(1) @Max(100) size` on `@RequestParam`. Spring Framework 6.2's
+  built-in MVC method validation raises `HandlerMethodValidationException` (400). `@Validated` is deliberately
+  not used on the controller: it would route violations through `ConstraintViolationException`, which has no MVC
+  handler and would surface as 500.
+- **Narrow exception handling**: `ApiExceptionHandler` overrides exactly three `ResponseEntityExceptionHandler`
+  hooks: body validation (existing), parameter validation (new) and type mismatch (new). All three produce the
+  existing `Validation failed` + `errors[{field, message}]` shape. There is no catch-all `Exception` handler, so
+  unexpected errors keep Spring Boot's default 500 handling.
+- **Error contract change (documented)**: Spring's default type-mismatch detail echoes the submitted value
+  (`Failed to convert 'id' with value: 'not-a-uuid'`). It now returns `errors: [{field: "id", message: "has an
+  invalid format"}]`. This also changes the existing `GET /api/boats/{id}` bad-UUID body; the status stays 400.
+  A regression test pins the new contract. `instance` still contains the request path the client sent; this is
+  standard ProblemDetail behavior and is documented.
+- **Search**: one JPQL query, `lower(name) like lower(:pattern) or lower(description) like lower(:pattern)`, with
+  `escape '\'`. The service strips the input, escapes `\`, `%` and `_` so they match literally, and wraps it in
+  `%…%`. Blank search calls `findAll(pageable)`. Spring Data derives the count query. Everything runs in
+  PostgreSQL. No new index, per the constraint: a leading-wildcard LIKE can't use a b-tree index anyway, and
+  `pg_trgm` is documented as the next step.
+- **Ordering**: `Sort.by(desc("createdAt"), desc("id"))`, so ties on `createdAt` are broken by id.
+- **DTO**: `BoatPageResponse(content, page, size, totalElements, totalPages)` built from `Page<Boat>`. Spring Data's
+  `Page` JSON is not exposed.
+- **Docs**: `backend/README.md` is the API contract until OpenAPI exists. `CLAUDE.md` now requires updating it with
+  every contract change. The root README status line was stale ("boat management is not implemented yet") and was
+  corrected.
+
+### Verification performed (all executed)
+
+| Check | Result |
+|---|---|
+| `./mvnw spotless:apply verify` (JDK 21 container, Testcontainers) | BUILD SUCCESS, **46 tests** (21 controller, 12 service, 5 repository, 2 DB constraint, 6 security) |
+| New service tests (real PostgreSQL, seeded with explicit `id`/`created_at`) | newest-first default page; 25 boats → pages of 10/10/5, and page 3 empty with correct totals; `createdAt` ties ordered by `id DESC`; empty table → `[]`, 0, 0; case-insensitive name and description search; blank search = no filter; search applied before pagination (15 of 20 match → 2 pages); `%` and `_` matched literally |
+| New controller tests | defaults `(0, 10, null)` and exactly 5 JSON keys; parameters passed through; `page=-1`, `size=0`, `size=-5`, `size=101` → 400 `Validation failed` with the right `field`, service never called; `page=S3CR3T-abc`, `size=99999999999` → 400 `has an invalid format` without the value; `GET /api/boats/not-a-uuid` → 400, field `id`, no echoed value; anonymous → 401 |
+| `docker compose up --build -d --wait` + throwaway PKCE token (in `/private/tmp`, deleted afterwards) | all services healthy |
+| `GET /api/boats` on the empty DB | 200, `content: []`, 0, 0 |
+| Seeded 26 boats via POST, then listed through nginx | defaults: 10 newest, 26 total, 3 pages; `page=2`: last 6; `size=100`: all 26 |
+| `search=pEaRl` / `submarine` (description) / `100%` / `boat 1` with `size=5&page=1` / whitespace / no match | 1 / 1 / 1 (literal) / 11 total, second page of 5 / 26 / 0 |
+| `page=-1`, `size=0`, `size=101`, `page=S3CR3T-abc`, `size=99999999999`, `/api/boats/not-a-uuid` | all 400 with the validation shape and no echoed values; no 500 |
+| Anonymous `GET /api/boats` | 401 |
+| CRUD regression: GET/PUT/POST/invalid POST | 200/200/201/400 |
+| Cleanup | 27 × DELETE → 204, deleted id → 404, `boats` count back to 0; no errors or 500s in backend logs |
+
+**Not verified:** the frontend (out of scope, unchanged). CI on GitHub (nothing pushed).
+
+### Unexpected server error regression check
+
+**Prompt (verbatim):**
+
+```text
+Perform one focused backend regression check for unexpected server errors.
+
+Goal: Verify that an unexpected exception in an authenticated API request produces HTTP 500, rather than being incorrectly transformed into HTTP 401 by Spring Security during error dispatch.
+
+Requirements:
+1. Add a focused integration-style test using the existing Spring MVC and Security test infrastructure.
+2. Simulate an unexpected server-side exception from a protected endpoint.
+3. Verify the actual HTTP response status is 500.
+4. Do not expose exception messages, stack traces, SQL information or internal implementation details in the response body.
+5. Do not introduce a broad catch-all exception handler solely to pass the test.
+6. If the test reveals a problem, explain the root cause and propose the smallest security configuration change before implementing it.
+7. If a MockMvc test cannot reproduce the real servlet error dispatch behavior, report that limitation and propose a minimal runtime verification instead.
+
+Keep the change focused. Do not modify unrelated code or introduce new architectural abstractions.
+
+Document meaningful findings in AI_USAGE.md. Run the relevant tests and formatting checks, commit locally, and do not push automatically.
+```
+
+**MockMvc limitation:** MockMvc has no servlet container. An unhandled exception propagates out of `perform()` as a
+`ServletException`, and the container's error dispatch to `/error` never happens. That dispatch is where Spring
+Security could turn an error into 401. So MockMvc cannot answer this question.
+
+**Approach:** the new `UnexpectedErrorDispatchTest` uses `@SpringBootTest(webEnvironment = RANDOM_PORT)`, which
+runs a real embedded Tomcat with the real `SecurityConfig` filter chain. It uses the existing
+`PostgresTestContainer` for the datasource and `TestRestTemplate` for real HTTP calls. Two things are mocked:
+`BoatService.get` throws `IllegalStateException("S3CR3T-internal-detail select * from boats")`, and `JwtDecoder`
+accepts a fixed token so no Keycloak is needed (issuer and audience validation stay covered by `TokenValidatorTest`).
+
+**Findings:**
+
+- **No problem found; no production change.** The authenticated request returns **500**. The body is Spring Boot's
+  `/error` JSON (`"status":500`, `"error":"Internal Server Error"`), which proves the container error dispatch
+  happened. The body does not contain the exception message, marker, class names, `select`, or a stack trace. The
+  message appears only in the server log. The same endpoint without a token returns 401.
+- **The test is sensitive to the risk it targets.** A temporary, uncommitted `.requestMatchers("/error").denyAll()`
+  in `SecurityConfig` made the test fail with `expected 500 but was 403`. This shows the `/error` dispatch really
+  passes through the security filter chain, and that the authenticated context survives it in the real
+  configuration. Afterwards `SecurityConfig` was restored and `git diff` confirmed no production change.
+- No catch-all exception handler was added.
+
+**Verification:** `./mvnw spotless:check verify` (JDK 21 container, Testcontainers): BUILD SUCCESS, **48 tests**.
+`backend/README.md` was updated: the 500 body had been marked "not verified", and the test table now includes the new class.
+
+**Limitations:** the token is decoded by a mock, so the test does not cover real signature validation during error
+dispatch. Only one exception type was exercised, from one endpoint.
