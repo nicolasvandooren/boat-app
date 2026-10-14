@@ -67,14 +67,52 @@
   opacity: 0.6;
 }
 
-/* Cards are not links yet (the detail page arrives in 3A.3): no hover, pointer or focus styling. */
+/* The whole card is clickable through the title link's ::after; hover and focus make that visible. */
 .card {
+  position: relative;
   display: flex;
   border: 1px solid var(--color-border);
   border-top: 3px solid var(--color-teal-700);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.card:hover {
+  border-color: var(--color-teal-700);
+  box-shadow: 0 4px 16px rgb(11 37 69 / 14%);
+}
+
+.card:focus-within {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.cardLink {
+  color: var(--color-navy-900);
+  text-decoration: underline;
+  text-decoration-color: var(--color-teal-700);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
+}
+
+.cardLink:hover {
+  color: var(--color-teal-700);
+}
+
+/* The card's focus-within ring replaces the link's own outline. */
+.cardLink:focus-visible {
+  outline: none;
+}
+
+.cardLink::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
 }
 
 .card article {

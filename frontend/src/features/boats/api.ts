@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from 'react-oidc-context'
 import { apiGet } from '../../api/client'
-import type { BoatPage } from './types'
+import type { Boat, BoatPage } from './types'
 
 export const PAGE_SIZE = 10
 /** The backend's upper bound for `page` (backend/README.md). */
@@ -22,6 +22,33 @@ export function parseListParams(searchParams: URLSearchParams): BoatListParams {
     page: page <= MAX_PAGE ? page : 0,
     search: (searchParams.get('search') ?? '').trim(),
   }
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Boat ids are UUIDs; anything else cannot exist, so it is shown as "not found" without a request. */
+export function isBoatId(id: string | undefined): id is string {
+  return id !== undefined && UUID.test(id)
+}
+
+export function fetchBoat(id: string, accessToken: string, signal?: AbortSignal): Promise<Boat> {
+  return apiGet<Boat>(`/api/boats/${encodeURIComponent(id)}`, accessToken, signal)
+}
+
+export function useBoat(id: string) {
+  const { user } = useAuth()
+  const accessToken = user?.access_token
+  const subject = user?.profile.sub
+
+  return useQuery({
+    // Same user-scoped convention as the list: [feature, subject, ...] (see App.tsx).
+    queryKey: ['boats', subject, 'detail', id],
+    queryFn: ({ signal }) => {
+      if (!accessToken) throw new Error('Not signed in')
+      return fetchBoat(id, accessToken, signal)
+    },
+    enabled: Boolean(accessToken && subject),
+  })
 }
 
 export function useBoats({ page, search }: BoatListParams) {

@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { axeViolations } from '../../test/axe'
 import { mockSignedIn, signinRedirect } from '../../test/mockAuth'
 import { BoatsPage } from './BoatsPage'
 import type { Boat, BoatPage } from './types'
@@ -63,7 +64,7 @@ function renderPage(
   url = '/boats',
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
 ) {
-  render(
+  const { container, unmount } = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[url]}>
         <Routes>
@@ -73,7 +74,7 @@ function renderPage(
       </MemoryRouter>
     </QueryClientProvider>,
   )
-  return { queryClient, user: userEvent.setup() }
+  return { container, unmount, queryClient, user: userEvent.setup() }
 }
 
 const location = () => screen.getByTestId('location')
@@ -103,8 +104,10 @@ describe('BoatsPage', () => {
     expect(within(cards[1]).getByText('No description')).toBeInTheDocument()
     expect(cards[0].querySelector('time')).toHaveAttribute('datetime', '2026-10-13T13:43:07Z')
     expect(screen.getByRole('status')).toHaveTextContent('12 boats')
-    // Not navigable until the detail page exists.
-    expect(screen.queryByRole('link', { name: /Boat 1/ })).not.toBeInTheDocument()
+    expect(within(cards[0]).getByRole('link', { name: 'Boat 1' })).toHaveAttribute(
+      'href',
+      `/boats/${boat(1).id}`,
+    )
 
     expect(requestedUrls()).toEqual(['/api/boats?page=0&size=10'])
     const init = fetchMock.mock.calls[0]?.[1]
@@ -305,5 +308,18 @@ describe('BoatsPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Sign in again' }))
     expect(signinRedirect).toHaveBeenCalledOnce()
+  })
+
+  it('has no automatically detectable accessibility violations (boats and empty fleet)', async () => {
+    serveBoats(() => json(pageOf([boat(1), boat(2, { description: null })], 0, 25)))
+    const withBoats = renderPage()
+    await screen.findByText('Boat 1')
+    expect(await axeViolations(withBoats.container)).toEqual([])
+    withBoats.unmount()
+
+    serveBoats(() => json(pageOf([])))
+    const empty = renderPage()
+    await screen.findByText(/Your fleet is empty/)
+    expect(await axeViolations(empty.container)).toEqual([])
   })
 })

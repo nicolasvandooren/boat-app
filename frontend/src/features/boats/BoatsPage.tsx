@@ -1,8 +1,8 @@
 import { useCallback } from 'react'
-import { useAuth } from 'react-oidc-context'
-import { Link, useSearchParams } from 'react-router'
-import { ApiError } from '../../api/client'
+import { Link, useLocation, useSearchParams } from 'react-router'
+import { useDocumentTitle } from '../../components/useDocumentTitle'
 import { BoatSearch } from './BoatSearch'
+import { LoadError } from './LoadError'
 import { parseListParams, useBoats } from './api'
 import type { Boat, BoatPage } from './types'
 import styles from './BoatsPage.module.css'
@@ -13,11 +13,22 @@ function countLabel(count: number) {
   return `${count} ${count === 1 ? 'boat' : 'boats'}`
 }
 
-function BoatCard({ boat }: { boat: Boat }) {
+/** Location state passed to the detail page so "Back to fleet" can restore page and search. */
+export interface BoatLinkState {
+  listSearch: string
+}
+
+function BoatCard({ boat, listSearch }: { boat: Boat; listSearch: string }) {
+  const state: BoatLinkState = { listSearch }
   return (
     <li className={styles.card}>
       <article>
-        <h2 className={styles.cardTitle}>{boat.name}</h2>
+        <h2 className={styles.cardTitle}>
+          {/* The only interactive element; its ::after stretches the click target over the card. */}
+          <Link className={styles.cardLink} to={`/boats/${boat.id}`} state={state}>
+            {boat.name}
+          </Link>
+        </h2>
         {boat.description ? (
           <p className={styles.description}>{boat.description}</p>
         ) : (
@@ -65,33 +76,6 @@ function Pagination({ page, totalPages, linkTo }: PaginationProps) {
   )
 }
 
-function LoadError({ error, onRetry }: { error: Error; onRetry: () => void }) {
-  const auth = useAuth()
-
-  if (error instanceof ApiError && error.status === 401) {
-    // No automatic redirect: a 401 here must never start a login loop.
-    return (
-      <div className={styles.notice}>
-        <p role="alert">Your session has expired.</p>
-        <button type="button" onClick={() => void auth.signinRedirect()}>
-          Sign in again
-        </button>
-      </div>
-    )
-  }
-
-  // Only 400 details are shown: they describe the request and never echo submitted values.
-  const detail = error instanceof ApiError && error.status === 400 ? error.detail : undefined
-  return (
-    <div className={styles.notice}>
-      <p role="alert">Could not load boats. {detail ?? 'Please try again.'}</p>
-      <button type="button" onClick={onRetry}>
-        Retry
-      </button>
-    </div>
-  )
-}
-
 function summary(data: BoatPage | undefined, isPending: boolean, search: string) {
   if (isPending) return 'Loading boats…'
   if (!data) return ''
@@ -101,6 +85,8 @@ function summary(data: BoatPage | undefined, isPending: boolean, search: string)
 
 export function BoatsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
+  useDocumentTitle('Fleet overview')
   const { page, search } = parseListParams(searchParams)
   const { data, error, isPending, isPlaceholderData, refetch } = useBoats({ page, search })
 
@@ -131,6 +117,7 @@ export function BoatsPage() {
     if (error) {
       return (
         <LoadError
+          what="boats"
           error={error}
           onRetry={() => {
             void refetch()
@@ -179,7 +166,7 @@ export function BoatsPage() {
           aria-busy={isPlaceholderData}
         >
           {data.content.map((boat) => (
-            <BoatCard key={boat.id} boat={boat} />
+            <BoatCard key={boat.id} boat={boat} listSearch={location.search} />
           ))}
         </ul>
         <Pagination page={data.page} totalPages={data.totalPages} linkTo={linkTo} />

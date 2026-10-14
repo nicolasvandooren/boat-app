@@ -1,11 +1,25 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from 'react-oidc-context'
-import { Link, Outlet } from 'react-router'
+import { useEffect, useRef } from 'react'
+import { Link, Outlet, useLocation } from 'react-router'
 import styles from './Layout.module.css'
 
 export function Layout() {
   const auth = useAuth()
   const queryClient = useQueryClient()
+  const { pathname } = useLocation()
+  const mainRef = useRef<HTMLElement>(null)
+  const previousPathname = useRef(pathname)
+
+  // After client-side navigation to another page, move focus to the new content so keyboard and screen
+  // reader users start there (a full page load does this by itself). Query-string changes (search,
+  // pagination) keep focus where it is.
+  useEffect(() => {
+    if (previousPathname.current === pathname) return
+    previousPathname.current = pathname
+    window.scrollTo(0, 0)
+    mainRef.current?.focus()
+  }, [pathname])
 
   const signOut = () => {
     // Drop private data before leaving; Keycloak then returns to /signed-out.
@@ -44,7 +58,7 @@ export function Layout() {
           )}
         </div>
       </header>
-      <main id="main" className={styles.main} tabIndex={-1}>
+      <main id="main" ref={mainRef} className={styles.main} tabIndex={-1}>
         <Outlet />
       </main>
     </>

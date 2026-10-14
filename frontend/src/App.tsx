@@ -5,6 +5,7 @@ import { Navigate, Route, Routes } from 'react-router'
 import { RequireAuth } from './auth/RequireAuth'
 import { SignedOutPage } from './auth/SignedOutPage'
 import { Layout } from './components/Layout'
+import { BoatDetailPage } from './features/boats/BoatDetailPage'
 import { BoatsPage } from './features/boats/BoatsPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 
@@ -32,6 +33,7 @@ export default function App() {
         <Route element={<RequireAuth />}>
           <Route index element={<Navigate to="/boats" replace />} />
           <Route path="boats" element={<BoatsPage />} />
+          <Route path="boats/:id" element={<BoatDetailPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>
