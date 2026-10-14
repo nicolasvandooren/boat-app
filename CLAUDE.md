@@ -91,6 +91,11 @@ A small boat management app built for a time-boxed technical challenge. Prioriti
   - On success, `setQueryData` the server response under `['boats', sub, 'detail', id]` and invalidate
     `['boats', sub, 'list']`.
   - Navigate with `replace` so Back doesn't return to a submitted form.
+- **Deletes:**
+  - Confirm inline, never with `window.confirm()`: focus moves into the panel, Cancel/Escape send nothing and
+    return focus, and controls are disabled while pending.
+  - On success, remove only `['boats', sub, 'detail', id]` (`exact: true`), invalidate `['boats', sub, 'list']`,
+    and navigate away with `replace`.
 - Pages can mark an element with `data-focus-on-navigate` (and `tabIndex={-1}`); `Layout` focuses it instead of
   `<main>` after navigation.
 - Route tests render through `src/test/boatRoutes.tsx`, which uses `createQueryClient()` (real `staleTime`, no

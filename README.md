@@ -4,8 +4,8 @@ A small boat management application: Spring Boot 3.5 (Java 21) REST API, React +
 and Keycloak for OIDC login (Authorization Code + PKCE).
 
 > Status: the backend REST API (boat CRUD, paginated listing and search) is complete. The frontend has automatic
-> login, logout to a public signed-out page, a paginated, searchable fleet overview, boat details, and creating
-> and editing boats. Deletion comes next (3B.2).
+> login, logout to a public signed-out page, a paginated, searchable fleet overview, boat details, and creating,
+> editing and deleting boats (full CRUD).
 
 API reference, authentication details and backend development notes: [backend/README.md](backend/README.md).
 Frontend routes, structure and commands: [frontend/README.md](frontend/README.md).

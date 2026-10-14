@@ -2048,3 +2048,121 @@ Do not push or merge automatically.
 - A 401 while editing loses unsaved input (sign-in is a full-page redirect); the message warns about it.
 - The notice is stored in history state, so it reappears if the detail page is reloaded right after saving.
 - There's no "unsaved changes" prompt when leaving the form. CI has not run these commits (not pushed).
+
+## Iteration 3B.2 — Delete boats (2026-10-14)
+
+### Prompt (verbatim)
+
+```text
+Proceed with iteration 3B.2 — Delete Boats.
+
+Checkpoint 3B.1 is approved: create and edit work end to end, 81 tests pass, and the current architecture should be preserved.
+
+### Goal
+
+Complete the final mandatory CRUD operation using `DELETE /api/boats/{id}`.
+
+### Requirements
+
+- Add a clearly identifiable "Delete boat" action on the boat detail page.
+- Require explicit confirmation before deletion, including the boat name.
+- Keep the confirmation keyboard-accessible and understandable for screen readers. Prefer the simplest reliable approach; a native confirmation dialog is acceptable for this challenge.
+- Cancel must perform no API request.
+- Use the existing authenticated API client and TanStack Query mutation conventions.
+- Prevent duplicate deletion requests.
+- Show a clear pending state.
+- On success, remove or invalidate the deleted boat's detail query and invalidate the current user's fleet lists.
+- Navigate back to `/boats`, preserving the previous search context where practical, with a success notice.
+- Handle 401 without automatic redirect, 404 when the boat was already deleted, and network/5xx errors with a safe retry path.
+- Do not accidentally remove data from another user's query cache.
+
+### Tests
+
+Add focused tests for:
+- Cancel confirmation → no DELETE request.
+- Confirm → correct authenticated DELETE request.
+- Success → navigation and cache updates.
+- 401, 404 and server/network errors.
+- Duplicate-submit prevention.
+- Keyboard accessibility where practical.
+
+Run format, lint, typecheck, tests and production build.
+
+### Browser verification
+
+Using Google Chrome:
+1. Create a clearly identified `[dev]` boat.
+2. Open its detail page.
+3. Cancel deletion and verify the boat still exists.
+4. Confirm deletion and verify the boat disappears from the fleet.
+5. Verify the deleted boat URL shows "Boat not found".
+6. Check console/network errors and responsive behavior.
+
+Only delete clearly identified development data created for this test. Do not delete other existing boats.
+
+### Boundaries
+
+- No backend or Keycloak changes.
+- No new UI framework or unnecessary abstraction.
+- Preserve the existing create/edit functionality.
+- Keep documentation and AI_USAGE.md updated.
+- Make meaningful local commits.
+- Stop and report after 3B.2.
+- Do not push or merge automatically.
+
+Implement directly after inspecting the existing code. No extensive planning cycle is necessary.
+```
+
+### Decisions
+
+- **Branch:** 3B.1 was not merged yet, so `vandoo/feat/boat-delete` is stacked on `vandoo/feat/boat-create-edit`.
+- **Inline confirmation instead of `window.confirm()`.** The prompt allowed a native dialog, but `confirm()`
+  blocks the page, and with it the Chrome automation used for verification. jsdom can't test it, and it doesn't
+  implement `<dialog>.showModal()` either. The inline panel:
+  - is a `role="group"` labelled "Delete “<name>”?" and described by "This permanently removes the boat. It
+    cannot be undone."
+  - gets focus when it opens; Cancel and Escape close it without a request and return focus to "Delete boat"
+  - catches Escape with a native listener on the panel, not a JSX key handler. jsx-a11y flags key handlers on
+    non-interactive elements, and the AI's first draft suppressed that rule; the listener replaced the
+    suppression.
+- **`useDeleteBoat(id)`:**
+  - `apiDelete` accepts the empty 204.
+  - On success it removes only `['boats', sub, 'detail', id]` (`exact: true`) and invalidates
+    `['boats', sub, 'list']`.
+  - A 404 also invalidates the lists, since the boat was deleted elsewhere.
+  - The caller navigates with `replace` to `/boats<listSearch>` with `{ notice: 'deleted', deletedName }`. The
+    fleet shows a focused status message, "“<name>” was deleted.".
+- **Pending and errors:**
+  - Both buttons are disabled with "Deleting…", and `isPending` also guards the handlers.
+  - 401 offers "Sign in again" without redirecting; 404 says "already deleted" and links to the fleet.
+  - Network errors and 5xx keep the confirmation open with a generic message for retrying.
+
+### Correction during implementation
+
+- A test asserted that the user's cached list was *invalidated* after deleting. It failed because the app
+  navigates to the fleet, which immediately refetches that list and resets the flag. The test now asserts the
+  observable effect instead: the list is fetched again after the DELETE and holds the server's new, empty result.
+  The 404 test still checks the invalidation, because there the user stays on the page.
+
+### Verification performed
+
+| Check | Result |
+|---|---|
+| `format:check`, `lint`, `typecheck`, `test`, `build` | all pass; **92 tests** in 13 files (DeleteBoat 9, client 8, …) |
+| Mutation checks | without the pending guard, the single-request test fails; with cache removal widened to `['boats']`, the "other user's cache" test fails; with Cancel deleting, both cancel tests (click and Escape) fail |
+| Data before the test | 25 boats, including one boat not named `[dev]` ("Test"). It was left untouched and still exists. |
+| 1–2. Create `[dev] 3B.2 Delete me` (**real** typing + Enter) and open it | 201, "Boat added.", red "Delete boat" in a separate section |
+| 3. Delete boat → Cancel (**real** clicks) | the panel got focus, with label "Delete “[dev] 3B.2 Delete me”?" and the description; after Cancel, focus was on "Delete boat"; no DELETE was sent; the boat still returned 200 |
+| 4. Keyboard only: Enter opens → Escape closes → Enter → Tab → Enter on "Delete permanently" (**real** keys) | Escape closed with no request; the confirm sent **one** DELETE, which nginx logged as **204** (the extension's network log showed 503, the same capture glitch seen in 3A, contradicted by the nginx log and the result); landed on `/boats` with the focused "“[dev] 3B.2 Delete me” was deleted."; the boat is gone from the list and the API |
+| 5. Deleted boat URL | "Boat not found", title "Boat not found – The Boat App", no delete button |
+| 6. 390 px (probe iframe on `[dev] 3B.1 Sea Otter II`, **scripted** open and Cancel, nothing deleted) | no horizontal overflow, the panel wraps cleanly; contrast at least 5.14:1 with no failures |
+| Console and network | no console messages; the only non-200 is the expected 404 for the deleted boat |
+
+### Limitations
+
+- 401, 404 and network/5xx during deletion are verified by automated tests only.
+- The panel is inline, not modal. Focus is moved into it but not trapped, which is acceptable because it doesn't
+  cover any content.
+- If the deleted boat was the only item on the last fleet page, the user returns to a page past the end. The
+  fleet then shows its existing "This page does not exist" state with a link to the first page.
+- CI has not run these commits (not pushed).
