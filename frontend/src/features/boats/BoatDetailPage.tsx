@@ -88,7 +88,7 @@ export function BoatDetailPage() {
     <>
       <p className={styles.back}>
         <Link to={backTo}>
-          <span aria-hidden="true">← </span>Back to fleet
+          <span aria-hidden="true">←</span>Back to fleet
         </Link>
       </p>
       {isBoatId(id) ? <BoatDetail id={id} /> : <BoatNotFound />}
