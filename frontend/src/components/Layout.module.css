@@ -1,0 +1,61 @@
+.header {
+  background: var(--color-navy-900);
+  color: var(--color-on-dark);
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: var(--space-3) var(--gutter);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-on-dark);
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.brand svg {
+  color: var(--color-teal-100);
+}
+
+.brand:focus-visible,
+.account button:focus-visible {
+  outline-color: var(--color-teal-100);
+}
+
+.account {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.account button {
+  border-color: var(--color-teal-100);
+  background: transparent;
+}
+
+.account button:hover {
+  background: var(--color-navy-700);
+}
+
+.main {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: var(--space-8) var(--gutter);
+}
+
+.main:focus {
+  outline: none;
+}
