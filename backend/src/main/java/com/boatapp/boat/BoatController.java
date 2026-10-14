@@ -3,6 +3,7 @@ package com.boatapp.boat;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import java.net.URI;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -26,12 +27,20 @@ public class BoatController {
     this.service = service;
   }
 
+  /**
+   * Deliberate API limit: with the maximum page size of 100, {@code page * size} always fits JPA's
+   * {@code int} offset. Beyond it Spring Data throws instead of returning an empty page.
+   */
+  static final int MAX_PAGE = Integer.MAX_VALUE / 100;
+
   /** Constraint violations are reported by Spring MVC's built-in method validation as 400. */
   @GetMapping
   public BoatPageResponse list(
-      @RequestParam(defaultValue = "0") @Min(0) int page,
+      @RequestParam(defaultValue = "0") @Min(0) @Max(MAX_PAGE) int page,
       @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size,
-      @RequestParam(required = false) String search) {
+      @RequestParam(required = false)
+          @Pattern(regexp = BoatRequest.NO_NUL, message = BoatRequest.NO_NUL_MESSAGE)
+          String search) {
     return service.list(page, size, search);
   }
 

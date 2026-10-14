@@ -155,6 +155,17 @@ class BoatServiceTest {
   }
 
   @Test
+  void maximumPageReturnsEmptyPageInsteadOfFailing() {
+    insertBoats(3, "Boat");
+
+    BoatPageResponse page = service.list(BoatController.MAX_PAGE, 100, null);
+
+    assertThat(page.content()).isEmpty();
+    assertThat(page.page()).isEqualTo(21474836);
+    assertThat(page.totalElements()).isEqualTo(3);
+  }
+
+  @Test
   void listWithoutBoatsReturnsEmptyPage() {
     BoatPageResponse page = service.list(0, 10, null);
 
