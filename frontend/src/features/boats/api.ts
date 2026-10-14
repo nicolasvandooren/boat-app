@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from 'react-oidc-context'
-import { apiGet, apiSend } from '../../api/client'
+import { ApiError, apiDelete, apiGet, apiSend } from '../../api/client'
 import type { BoatInput } from './boatInput'
 import type { Boat, BoatPage } from './types'
 
@@ -105,4 +105,32 @@ export function useUpdateBoat(id: string) {
   return useBoatMutation((input, accessToken) =>
     apiSend<Boat>('PUT', `/api/boats/${encodeURIComponent(id)}`, accessToken, input),
   )
+}
+
+/**
+ * Deletes a boat. Afterwards the boat's detail query is removed and the user's lists are invalidated; a 404
+ * means it was already deleted elsewhere, so the lists are stale too. Only keys of the signed-in subject are
+ * touched, so no other identity's cache is affected. The caller navigates away from the detail page.
+ */
+export function useDeleteBoat(id: string) {
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+  const accessToken = user?.access_token
+  const subject = user?.profile.sub
+
+  return useMutation({
+    mutationFn: () => {
+      if (!accessToken) throw new Error('Not signed in')
+      return apiDelete(`/api/boats/${encodeURIComponent(id)}`, accessToken)
+    },
+    onSuccess: async () => {
+      queryClient.removeQueries({ queryKey: ['boats', subject, 'detail', id], exact: true })
+      await queryClient.invalidateQueries({ queryKey: ['boats', subject, 'list'] })
+    },
+    onError: async (error) => {
+      if (error instanceof ApiError && error.status === 404) {
+        await queryClient.invalidateQueries({ queryKey: ['boats', subject, 'list'] })
+      }
+    },
+  })
 }
