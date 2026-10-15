@@ -2359,3 +2359,13 @@ anything, without a global `overflow-x: hidden`.
 
 **Limitations:** as above. Emulation only, no real iOS Safari and no device. Only text the audit searched
 for is covered; other user-supplied strings shown elsewhere were checked by reading the CSS.
+
+**Manual security verification — Authentication and session management**
+
+I personally inspected the Keycloak OIDC client configuration and verified that the SPA uses a public client, Authorization Code Flow and mandatory PKCE S256, with unnecessary authentication flows disabled.
+
+I decoded a real access token and confirmed the expected issuer, audience (`boat-api`), authorized party (`boat-frontend`) and five-minute lifetime.
+
+I also inspected browser storage and confirmed that OIDC session data is stored in `sessionStorage` while authenticated and removed after logout. No access tokens were found in `localStorage` or application cookies during my checks.
+
+Finally, I manually exercised protected API endpoints with missing and invalid Bearer tokens, verified the expected HTTP 401 responses, tested server-side validation errors, and checked login, logout and browser navigation behavior.
