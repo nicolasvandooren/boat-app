@@ -7,10 +7,15 @@ interface LoadErrorProps {
   what: string
   error: Error
   onRetry: () => void
+  /**
+   * A background refetch failed while the last loaded data is still shown (and any unsaved input is kept), so
+   * the message says the data may be outdated instead of replacing it.
+   */
+  stale?: boolean
 }
 
 /** Error state shared by the boat pages: session expiry, or a generic failure with Retry. */
-export function LoadError({ what, error, onRetry }: LoadErrorProps) {
+export function LoadError({ what, error, onRetry, stale = false }: LoadErrorProps) {
   const auth = useAuth()
 
   if (error instanceof ApiError && error.status === 401) {
@@ -20,6 +25,23 @@ export function LoadError({ what, error, onRetry }: LoadErrorProps) {
         <p role="alert">Your session has expired.</p>
         <button type="button" onClick={() => void auth.signinRedirect()}>
           Sign in again
+        </button>
+      </div>
+    )
+  }
+
+  if (stale) {
+    const reason =
+      error instanceof ApiError && error.status === 404
+        ? 'It may have been deleted.'
+        : 'Please try again.'
+    return (
+      <div className={styles.notice}>
+        <p role="alert">
+          Could not refresh {what}; the last loaded version is shown. {reason}
+        </p>
+        <button type="button" onClick={onRetry}>
+          Retry
         </button>
       </div>
     )

@@ -51,23 +51,28 @@ function EditNotFound({ listSearch }: { listSearch: string }) {
 
 function EditLoader({ id, listSearch }: { id: string; listSearch: string }) {
   const { data: boat, error, refetch } = useBoat(id)
+  const retry = () => {
+    void refetch()
+  }
+
+  if (boat) {
+    // A failed background refetch (e.g. on window focus) keeps the cached boat: the form stays mounted so the
+    // user's unsaved input survives, and the failure is reported above it. Saving reports its own errors.
+    return (
+      <>
+        {error && <LoadError what="this boat" error={error} onRetry={retry} stale />}
+        {/* Mounted only once the boat is loaded, so the form's initial values never need syncing. */}
+        <EditForm key={boat.id} boat={boat} listSearch={listSearch} />
+      </>
+    )
+  }
   if (error) {
     if (error instanceof ApiError && (error.status === 404 || error.status === 400)) {
       return <EditNotFound listSearch={listSearch} />
     }
-    return (
-      <LoadError
-        what="this boat"
-        error={error}
-        onRetry={() => {
-          void refetch()
-        }}
-      />
-    )
+    return <LoadError what="this boat" error={error} onRetry={retry} />
   }
-  if (!boat) return <p role="status">Loading boat…</p>
-  // Mounted only once the boat is loaded, so the form's initial values never need syncing.
-  return <EditForm key={boat.id} boat={boat} listSearch={listSearch} />
+  return <p role="status">Loading boat…</p>
 }
 
 export function EditBoatPage() {

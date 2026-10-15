@@ -42,6 +42,9 @@ A small boat management app built for a time-boxed technical challenge. Prioriti
 - `strict` TypeScript, no `any`, function components and hooks only.
 - Routing with React Router; auth via `react-oidc-context` (`useAuth`).
 - Every data-fetching view handles loading, error and empty states explicitly.
+- Cached data wins over a later error: when a background refetch fails, TanStack keeps `data` and sets `error`.
+  Keep rendering the data (and any form built on it) and show the failure alongside it (`LoadError` with
+  `stale`). Never unmount a form with unsaved input because of a refetch error.
 - API calls go through `src/api/client.ts` with the bearer token; relative `/api/...` URLs only.
 - Prettier (no semicolons, single quotes, width 100) and ESLint must pass.
 - Structure: `src/App.tsx` (routes), `src/auth/` (OIDC config, `RequireAuth`, `SignedOutPage`),

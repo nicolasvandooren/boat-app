@@ -154,9 +154,9 @@ export function BoatsPage() {
       }
       return (
         <div className={styles.notice}>
-          <p>Your fleet is empty. No boats have been added yet.</p>
+          <p>The fleet is empty. No boats have been added yet.</p>
           <Link className="button-link" to="/boats/new" state={newBoatState}>
-            Add your first boat
+            Add the first boat
           </Link>
         </div>
       )

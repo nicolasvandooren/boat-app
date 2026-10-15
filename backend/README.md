@@ -51,11 +51,15 @@ Every endpoint except `/actuator/health/**` requires `Authorization: Bearer <acc
   Issuer discovery (`issuer-uri`) is deliberately not used, because the backend container cannot reach `localhost:8081`.
 - A missing, expired or invalid token returns **401** with a `WWW-Authenticate: Bearer …` header and an empty body.
 - Sessions are stateless and CSRF protection is disabled. The API uses no cookies.
+- **Authorization: one shared fleet.** Any authenticated user of the `boatapp` realm can call every endpoint and
+  read, create, update and delete **all** boats. There is no per-user ownership (the `boats` table has no owner
+  column, and queries don't filter by `sub`) and no role or scope check. `GET /api/me` is the only endpoint
+  that uses the caller's identity.
 
 ## Endpoints
 
 All paths are under `/api`. In Docker Compose the browser reaches them through the frontend's nginx at
-`http://localhost:3000/api/...`. The backend is also exposed directly on `http://localhost:8080` for debugging.
+`http://localhost:3000/api/...`. The backend is also published directly on `http://localhost:8080` (loopback only) for debugging.
 
 | Method | Path | Body | Success | Errors |
 |---|---|---|---|---|
@@ -252,6 +256,9 @@ Keycloak or validates a real token signature; that was verified manually against
 
 ## Known trade-offs
 
+- **Shared fleet, no per-user authorization.** All authenticated users see and modify the same boats (see
+  Authentication). Per-user fleets would need an owner column (a new migration) and a `sub` filter in every
+  query.
 - **Last write wins.** There is no version column or optimistic locking, so concurrent edits overwrite each other silently.
 - **Search uses `LIKE '%…%'` with `lower()`** and no index. Each search scans the table, which is fine at challenge scale.
   A `pg_trgm` GIN index would be the next step if the data grows.
