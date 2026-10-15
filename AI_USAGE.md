@@ -2317,3 +2317,45 @@ commit and don't push.
 - The Keycloak login page uses Keycloak's own theme and is outside this audit.
 - D3 remains (accepted).
 - CI has not run this commit (not pushed).
+
+### Follow-up: overflow from a long search term (missed by the first audit)
+
+**Prompt (summary):** after `ac9189f` the developer reproduced horizontal overflow in Chrome mobile emulation
+with a long unbroken name (150 characters, the maximum) on the boats page. They asked the AI to reproduce it,
+check the 150 limit, find the exact route and element from `scrollWidth`, viewport width and element rectangles,
+test invalid and valid input separately, check list, detail, create and edit, and report a fix before changing
+anything, without a global `overflow-x: hidden`.
+
+**Findings:**
+
+- The pasted string was 292 characters. The form rejects it ("Name must be 150 characters or fewer.") and
+  `POST /api/boats` returns 400, so it can't be saved. Create, Edit (with the invalid name submitted),
+  detail, delete confirmation and the deleted notice all stayed within the viewport.
+- **The overflow was on `/boats` when the long name was typed into "Search boats".** Two elements echo the
+  search term with `overflow-wrap: normal`:
+  - **result summary** (`.summary`): "1 boat matches "…"". A 150-character match made the document
+    958 px wide at 375 px.
+  - **empty-search notice** (`.notice`): "No boats match "…"." The 200-character no-match case (`maxLength`)
+    reached 1444 px.
+- **Why the first audit missed it:** it only searched short terms. Its overflow check compared element
+  rectangles with the viewport, but here the boxes stay 343 px wide while their text is up to 1403 px. Mobile
+  emulation also widens the layout viewport (`innerWidth` became 1444), so no element looked past the edge.
+  The earlier "0 horizontal overflow on every screen" was only true for the inputs tested.
+
+**Fix:** `overflow-wrap: anywhere` on `.summary` and `.notice` in `BoatsPage.module.css`, matching the existing
+`.success` notice. `.notice` also wraps load-error and not-found messages. Normal sentences are unaffected.
+
+**Verification performed:**
+
+| Check | Result |
+|---|---|
+| Frontend `format:check`, `lint`, `typecheck`, `test`, `build` | all pass; **95 tests** in 10 files |
+| Rebuilt frontend container | served CSS hash matches the local build |
+| 150-char matching search and 200-char no-match search at 375/430/768 | document width = screen width; summary and notice text width = box width |
+| Negative control (fix disabled with an injected style) | overflow returns at every width: 958 px (the developer's exact string), 1324 px and 1157 px, so the check detects it |
+| Developer's exact string (first 150 chars) at 375 | boat created, found by search, document 375 px; deleted (204, then 404) |
+| Audit hardened and rerun twice | it now compares against `screen.width`, flags any element whose text is wider than its box, and includes both long-search cases; 0 overflow, text overflow, overlap or input below 16 px on every screen at every width |
+| Cleanup | 13 reseeded `MobileQA` boats verified by ID and seed time and deleted (13 × 204, then 404); 3 boats remain (2 pre-existing plus the developer's manual test boat, left untouched) |
+
+**Limitations:** as above. Emulation only, no real iOS Safari and no device. Only text the audit searched
+for is covered; other user-supplied strings shown elsewhere were checked by reading the CSS.

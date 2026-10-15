@@ -61,6 +61,8 @@
   min-height: 1.5em;
   color: var(--color-navy-500);
   font-size: var(--font-size-sm);
+  /* Echoes the search term, which can be one long word. */
+  overflow-wrap: anywhere;
 }
 
 .grid {
@@ -197,6 +199,7 @@
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
+  overflow-wrap: anywhere;
 }
 
 .notice p:last-child {
