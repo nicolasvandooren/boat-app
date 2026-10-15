@@ -20,6 +20,7 @@ function EditForm({ boat, listSearch }: { boat: Boat; listSearch: string }) {
       {/* Long unbroken names must wrap instead of widening the page on phones. */}
       <h1 className={detailStyles.name}>Edit {boat.name}</h1>
       <BoatForm
+        mode="edit"
         initialValues={{ name: boat.name, description: boat.description ?? '' }}
         submitLabel="Save changes"
         isSubmitting={update.isPending}

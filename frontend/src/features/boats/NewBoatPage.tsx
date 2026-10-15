@@ -16,6 +16,7 @@ export function NewBoatPage() {
     <>
       <h1>Add boat</h1>
       <BoatForm
+        mode="create"
         initialValues={EMPTY}
         submitLabel="Add boat"
         isSubmitting={create.isPending}

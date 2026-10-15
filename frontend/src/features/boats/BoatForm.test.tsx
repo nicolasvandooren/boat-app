@@ -12,10 +12,13 @@ vi.mock('react-oidc-context', () => ({ useAuth: vi.fn(), hasAuthParams: vi.fn() 
 
 const onSubmit = vi.fn<(input: BoatInput) => void>()
 
-function form(props: { isSubmitting?: boolean; serverError?: Error | null } = {}) {
+function form(
+  props: { mode?: 'create' | 'edit'; isSubmitting?: boolean; serverError?: Error | null } = {},
+) {
   return (
     <MemoryRouter>
       <BoatForm
+        mode={props.mode ?? 'create'}
         initialValues={{ name: '', description: '' }}
         submitLabel="Add boat"
         isSubmitting={props.isSubmitting ?? false}
@@ -174,17 +177,43 @@ describe('BoatForm', () => {
     expect(signinRedirect).toHaveBeenCalledOnce()
   })
 
-  it('explains a 404 and a network error without technical details', () => {
-    const { rerender } = renderForm()
-    rerender(form({ serverError: new ApiError(404, { detail: 'No boat with id 123' }) }))
+  it('keeps the edit-flow 404 message: the boat no longer exists', () => {
+    const { rerender } = renderForm({ mode: 'edit' })
+    rerender(
+      form({ mode: 'edit', serverError: new ApiError(404, { detail: 'No boat with id 123' }) }),
+    )
     expect(screen.getByRole('alert')).toHaveTextContent('This boat no longer exists.')
     expect(screen.getByRole('link', { name: 'Go to the fleet' })).toHaveAttribute('href', '/boats')
+    expect(screen.queryByText(/No boat with id/)).not.toBeInTheDocument()
+  })
 
+  it('on a create 404, keeps the entered values and does not claim the boat was deleted', async () => {
+    const { rerender, user } = renderForm({ mode: 'create' })
+    await user.type(nameField(), 'Gull')
+    await user.type(descriptionField(), 'A small dinghy')
+
+    // The POST fails with a 404; the same form is re-rendered without unmounting (NewBoatPage never
+    // navigates away on error), so the user's input must survive.
+    rerender(
+      form({ mode: 'create', serverError: new ApiError(404, { detail: 'No boat with id 123' }) }),
+    )
+
+    expect(nameField()).toHaveValue('Gull')
+    expect(descriptionField()).toHaveValue('A small dinghy')
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not save the boat. Please try again.',
+    )
+    expect(screen.queryByText(/no longer exists/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Go to the fleet' })).not.toBeInTheDocument()
+  })
+
+  it('explains a network error without technical details', () => {
+    const { rerender } = renderForm()
     rerender(form({ serverError: new TypeError('Failed to fetch') }))
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Could not save the boat. Please try again.',
     )
-    expect(screen.queryByText(/Failed to fetch|No boat with id/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Failed to fetch/)).not.toBeInTheDocument()
   })
 
   it('has no automatically detectable accessibility violations (empty and with errors)', async () => {

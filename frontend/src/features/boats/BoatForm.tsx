@@ -25,6 +25,8 @@ import styles from './BoatForm.module.css'
 const FIELDS: BoatField[] = ['name', 'description']
 
 interface BoatFormProps {
+  /** Which flow owns the form. A 404 means "this boat is gone" only when editing. */
+  mode: 'create' | 'edit'
   initialValues: BoatFormValues
   submitLabel: string
   /** True while the save request is in flight: fields and submit are disabled. */
@@ -50,6 +52,7 @@ function isBoatField(field: string): field is BoatField {
 function describeServerError(
   error: Error | null,
   signIn: () => void,
+  mode: 'create' | 'edit',
 ): { fields: BoatFieldErrors; message: ReactNode } {
   if (!error) return { fields: {}, message: null }
 
@@ -87,14 +90,19 @@ function describeServerError(
   }
 
   if (error instanceof ApiError && error.status === 404) {
-    return {
-      fields: {},
-      message: (
-        <>
-          This boat no longer exists. <Link to="/boats">Go to the fleet</Link>
-        </>
-      ),
+    // Only editing an existing boat can hit a "boat is gone" 404; a 404 from creating it is just a failed
+    // save, so it must not claim an existing boat was deleted or push the user to abandon their input.
+    if (mode === 'edit') {
+      return {
+        fields: {},
+        message: (
+          <>
+            This boat no longer exists. <Link to="/boats">Go to the fleet</Link>
+          </>
+        ),
+      }
     }
+    return { fields: {}, message: 'Could not save the boat. Please try again.' }
   }
 
   return { fields: {}, message: 'Could not save the boat. Please try again.' }
@@ -102,6 +110,7 @@ function describeServerError(
 
 /** Shared create/edit form. Validation mirrors the server (see boatInput.ts); native validation is off. */
 export function BoatForm({
+  mode,
   initialValues,
   submitLabel,
   isSubmitting,
@@ -119,7 +128,7 @@ export function BoatForm({
   )
   const alertRef = useRef<HTMLDivElement>(null)
 
-  const server = describeServerError(serverError, () => void auth.signinRedirect())
+  const server = describeServerError(serverError, () => void auth.signinRedirect(), mode)
   const errors: BoatFieldErrors = { ...server.fields, ...clientErrors }
   const submitted = toBoatInput(values)
 
