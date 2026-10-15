@@ -162,7 +162,7 @@ npm test             # Vitest + React Testing Library (jsdom)
 npm run build        # type-check and production build
 ```
 
-CI runs format, lint, test and build (`.github/workflows/ci.yml`).
+CI runs format, lint, test and build (`.github/workflows/frontend.yml`).
 
 ## Structure
 

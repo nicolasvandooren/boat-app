@@ -99,7 +99,7 @@ Out of scope by choice: per-user boat ownership, optimistic concurrency control,
 
 ## 6. Representative prompts (verbatim)
 
-The five prompts below are copied **unchanged** from the development log. They show architecture framing, human correction of the initial plan, Plan Mode for a significant frontend slice, a rejected CI approach, and a test explicitly designed to catch a security regression. The detailed chronological journal will be included at [`docs/AI_DEVELOPMENT_LOG.md`](docs/AI_DEVELOPMENT_LOG.md) when this report is integrated into the repository; it must be added alongside this file before submission.
+The five prompts below are copied **unchanged** from the development log. They show architecture framing, human correction of the initial plan, Plan Mode for a significant frontend slice, a rejected CI approach, and a test explicitly designed to catch a security regression. The detailed chronological journal is available in [`docs/AI_DEVELOPMENT_LOG.md`](docs/AI_DEVELOPMENT_LOG.md).
 
 ### Prompt 1 — Initial scope, architecture and quality gates
 
@@ -567,4 +567,4 @@ Keep this change limited to validation error security testing and report the res
 
 The reported release-acceptance pass found no blockers: the stack started under Docker Compose, required user journeys passed, backend/API security checks passed, and automated frontend/backend suites were green. The PR history and final CI results were checked. Some UI-specific scenarios remained marked **NOT VERIFIED** in the final agent-run journey, as noted above.
 
-This document is a **curated methodology report**, not a transcript of every agent interaction. The complete chronological notes are intended to accompany it as [`docs/AI_DEVELOPMENT_LOG.md`](docs/AI_DEVELOPMENT_LOG.md), preserving detailed prompts, test evidence, revisions and mistakes. **Before submission**, confirm that this archive was added to the repository at the linked path, that all five prompts remain verbatim, that Markdown formatting passes, and that the documentation matches the final commit. These checks are not claimed as already completed.
+This document is a **curated methodology report**, not a transcript of every agent interaction. The complete chronological notes are available in [`docs/AI_DEVELOPMENT_LOG.md`](docs/AI_DEVELOPMENT_LOG.md), preserving detailed prompts, test evidence, revisions and mistakes. All five representative prompts were compared against the archive and confirmed to match exactly.
