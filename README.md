@@ -3,9 +3,8 @@
 A small boat management application: Spring Boot 3.5 (Java 21) REST API, React + TypeScript SPA, PostgreSQL,
 and Keycloak for OIDC login (Authorization Code + PKCE).
 
-> Status: the backend REST API (boat CRUD, paginated listing and search) is complete. The frontend has automatic
-> login, logout to a public signed-out page, a paginated, searchable fleet overview, boat details, and creating,
-> editing and deleting boats (full CRUD).
+Authenticated users can browse a paginated, searchable fleet, view boat details, and create, edit or delete boats.
+The interface includes form validation, loading and error states, deletion confirmation, and logout.
 
 API reference, authentication details and backend development notes: [backend/README.md](backend/README.md).
 Frontend routes, structure and commands: [frontend/README.md](frontend/README.md).
@@ -32,8 +31,9 @@ Keycloak admin credentials, copy `.env.example` to `.env` and edit it. `.env` is
 
 Ports 3000, 8080 and 8081 must be free on `127.0.0.1`. Compose publishes them on the loopback interface only,
 so the app, the API and the Keycloak admin console are not reachable from other machines on your network. Open
-the app as `http://localhost:3000`, the origin registered in Keycloak. The Keycloak realm is re-imported from
-`keycloak/realm-boatapp.json` on every start.
+the app as `http://localhost:3000`, the origin registered in Keycloak.
+On startup, Keycloak imports `keycloak/realm-boatapp.json` if the realm does not already exist.
+Restarting an existing container does not overwrite the realm's configuration.
 
 ## Authorization model: one shared fleet
 
@@ -59,6 +59,9 @@ the `boat-api` audience, and fetches signing keys over the internal Docker netwo
 The Compose PostgreSQL is not published to the host, so a backend running outside Docker needs its own database.
 See [backend/README.md](backend/README.md#local-development) for details.
 
+Run the setup commands from the repository root, then start the backend and frontend
+in separate terminals, each opened at the repository root.
+
 ```bash
 # Keycloak from Compose, plus a standalone PostgreSQL on localhost:5432
 docker compose up -d keycloak
@@ -66,17 +69,17 @@ docker run -d --name boatapp-dev-db -p 5432:5432 \
   -e POSTGRES_DB=boatapp -e POSTGRES_USER=boatapp -e POSTGRES_PASSWORD=boatapp postgres:17.9-alpine
 
 # backend on :8080 (needs JDK 21)
-cd backend && ./mvnw spring-boot:run
+(cd backend && ./mvnw spring-boot:run)
 
 # frontend (http://localhost:5173, proxies /api to localhost:8080)
-cd frontend && npm ci && npm run dev
+(cd frontend && npm ci && npm run dev)
 ```
 
 ## Checks
 
 ```bash
-cd backend && ./mvnw spotless:check verify
-cd frontend && npm run format:check && npm run lint && npm test && npm run build
+(cd backend && ./mvnw spotless:check verify)
+(cd frontend && npm run format:check && npm run lint && npm test && npm run build)
 ```
 
 Persistence tests use Testcontainers (PostgreSQL), so Docker must be running. Without a local JDK 21,
