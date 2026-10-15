@@ -194,6 +194,29 @@
   color: var(--color-navy-500);
 }
 
+/* Narrow screens: the page indicator gets its own row, Previous and Next share the row below.
+   Only the visual placement changes; DOM and tab order stay Previous, indicator, Next. */
+@media (max-width: 30rem) {
+  .pagination {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
+  }
+
+  /* The page indicator is always the middle child. */
+  .pagination > :nth-child(2) {
+    grid-row: 1;
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
+
+  .pagination a,
+  .pagination [aria-disabled='true'] {
+    justify-content: center;
+    min-height: 2.75rem;
+  }
+}
+
 .notice {
   padding: var(--space-6);
   border: 1px dashed var(--color-border);
