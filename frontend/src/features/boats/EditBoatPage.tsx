@@ -7,6 +7,7 @@ import { LoadError } from './LoadError'
 import { isBoatId, useBoat, useUpdateBoat } from './api'
 import { listSearchFrom, type BoatNavState } from './navigation'
 import type { Boat } from './types'
+import detailStyles from './BoatDetailPage.module.css'
 
 function EditForm({ boat, listSearch }: { boat: Boat; listSearch: string }) {
   useDocumentTitle(`Edit ${boat.name}`)
@@ -16,7 +17,8 @@ function EditForm({ boat, listSearch }: { boat: Boat; listSearch: string }) {
 
   return (
     <>
-      <h1>Edit {boat.name}</h1>
+      {/* Long unbroken names must wrap instead of widening the page on phones. */}
+      <h1 className={detailStyles.name}>Edit {boat.name}</h1>
       <BoatForm
         initialValues={{ name: boat.name, description: boat.description ?? '' }}
         submitLabel="Save changes"
