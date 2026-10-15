@@ -2238,3 +2238,124 @@ Implement only P2-1, P2-2 and P2-3 on `vandoo/chore/release-hardening`:
 - The stale alert sits above the edit page's `h1`, because the heading belongs to `EditForm`.
 - The P3 findings are not implemented.
 - CI has not run these commits (not pushed).
+
+## Mobile usability audit — Edit heading overflow and search input zoom (2026-10-15)
+
+### Prompt 1 (summary)
+
+Find and fix real mobile usability defects before delivery. Test login, the fleet overview, search,
+pagination, details, create, edit, delete confirmation and logout in a real browser at 375, 430 and 768 px.
+Check horizontal overflow, navigation, overlap, readability, touch targets, form accessibility, keyboard focus
+and error states. Report each defect with route, viewport and reproduction steps before changing code, propose
+only minimal CSS/layout fixes, and don't touch the backend, auth or schema.
+
+### Audit method
+
+Desktop Chrome windows cannot shrink to 375 px, so the AI drove the already-cached Playwright Chromium from a
+throwaway scratchpad script (not added to the project). It used exact viewports with `isMobile`, `hasTouch` and
+a device scale of 2 against the running Compose stack. It seeded 13 boats tagged `MobileQA`, including one with
+a 150-character unbroken name and description. On every screen of every flow it measured document
+`scrollWidth`, element overlap, control sizes, input font sizes and text below 14 px, and took screenshots.
+
+### Findings reported before any change
+
+- **D1 (high):** `/boats/:id/edit` at 375, 430 and 768 px. With a 150-character unbroken name the document was
+  2721 px wide, so the page scrolled sideways and the header covered only the first viewport. The cause was
+  `<h1>Edit {name}</h1>`, the only name-bearing heading without `overflow-wrap`.
+- **D2 (medium):** the `/boats` search input computed to 14 px because it inherits `font-size` from the label
+  wrapper. iOS Safari zooms the page when an input below 16 px gets focus.
+- **D3 (low, cosmetic):** at 375 and 430 px the pagination wraps with "Next page" alone on a second row. It
+  still works.
+- **Checked and not defects:** no overlapping controls. All targets are ≥ 40 px tall (WCAG 2.2 AA 2.5.8 needs
+  24 px), and cards are fully clickable through the stretched link. The header stays visible and wraps to two
+  rows on phones. Invalid submit focuses the field with a visible ring. The delete panel scrolls fully into view
+  with both buttons visible, and Escape returns focus.
+
+### Prompt 2 (summary, approval)
+
+Fix D1 and D2 only. Scope D1 to the Edit heading instead of a global heading rule, unless the global rule is
+shown to be safe and clearly better. Use the existing token for a 16 px search font. Leave D3 as is. Add no
+dependencies. Run all checks, recheck in the browser, clean up only the verified test boats, log here, make one
+commit and don't push.
+
+### AI proposal the developer corrected
+
+- The AI proposed `overflow-wrap: break-word` on all `h1, h2, h3` in `global.css`. The developer preferred a
+  scoped fix. The Edit `h1` now reuses `BoatDetailPage.module.css` `.name` (`overflow-wrap: anywhere`), the
+  class the detail page already uses for the same boat-name heading.
+
+### Decisions
+
+- **D2:** `.searchRow input` sets `font-size: var(--font-size-md)` (16 px) after `font: inherit`. The label
+  stays at 14 px.
+- **D3:** not changed. A smaller gap only fits until "Page 10 of 12", and reordering would split visual and
+  reading order.
+- **No new automated test:** jsdom does no layout, so a unit test could only assert that a class name or CSS
+  string exists. The layout was verified in the browser instead (below), and Playwright was not added to the
+  project.
+
+### Verification performed
+
+| Check | Result |
+|---|---|
+| Frontend `format:check`, `lint`, `typecheck`, `test`, `build` | all pass; **95 tests** in 10 files |
+| `docker compose up -d --build frontend` | served bundle hashes match the local build |
+| Edit page, 150-char unbroken name (`has space: false`) | `scrollWidth` = `clientWidth` at 375, 430 and 768 (before: 2721); the `h1` wraps within the content box (right edge 359/414/752) |
+| Other headings | unchanged computed `overflow-wrap` and size: "Fleet overview" `normal`, one line, 189×35 at all widths; "Add boat" and "Boat not found" `normal`, one line; detail name `anywhere` as before |
+| Search input | computed `font-size` 16px at all widths (label 14px); tapping focuses it; typing updates `?search=` after the debounce and shows "1 boat matches" |
+| Edit interactions | empty name → focus on Name with "Enter a name."; save → "Changes saved." with no overflow; the original description was restored afterwards |
+| Full flow audit, rerun twice | 0 horizontal overflow, 0 overlaps and 0 inputs below 16 px on every screen at every width |
+| Cleanup | listed the 13 `MobileQA` boats (all from the one seed run, IDs matched the seed output) and deleted exactly those IDs: 13 × 204, then GET 404 each; the 2 pre-existing boats remain. Boats the audit created itself were deleted by the flow |
+
+### Limitations
+
+- **Not verified on real iOS Safari or any physical device.** D2 rests on the computed 16 px font size and on
+  Safari's documented zoom threshold. Chromium emulation does not reproduce the zoom, and Firefox and WebKit
+  were not tested.
+- Tested in emulation only; on-screen keyboards, safe-area insets and screen readers on mobile were not tested.
+- The load-error, stale-data and 401 states were checked in code only, not on a mobile viewport.
+- The Keycloak login page uses Keycloak's own theme and is outside this audit.
+- D3 remains (accepted).
+- CI has not run this commit (not pushed).
+
+### Follow-up: overflow from a long search term (missed by the first audit)
+
+**Prompt (summary):** after `ac9189f` the developer reproduced horizontal overflow in Chrome mobile emulation
+with a long unbroken name (150 characters, the maximum) on the boats page. They asked the AI to reproduce it,
+check the 150 limit, find the exact route and element from `scrollWidth`, viewport width and element rectangles,
+test invalid and valid input separately, check list, detail, create and edit, and report a fix before changing
+anything, without a global `overflow-x: hidden`.
+
+**Findings:**
+
+- The pasted string was 292 characters. The form rejects it ("Name must be 150 characters or fewer.") and
+  `POST /api/boats` returns 400, so it can't be saved. Create, Edit (with the invalid name submitted),
+  detail, delete confirmation and the deleted notice all stayed within the viewport.
+- **The overflow was on `/boats` when the long name was typed into "Search boats".** Two elements echo the
+  search term with `overflow-wrap: normal`:
+  - **result summary** (`.summary`): "1 boat matches "…"". A 150-character match made the document
+    958 px wide at 375 px.
+  - **empty-search notice** (`.notice`): "No boats match "…"." The 200-character no-match case (`maxLength`)
+    reached 1444 px.
+- **Why the first audit missed it:** it only searched short terms. Its overflow check compared element
+  rectangles with the viewport, but here the boxes stay 343 px wide while their text is up to 1403 px. Mobile
+  emulation also widens the layout viewport (`innerWidth` became 1444), so no element looked past the edge.
+  The earlier "0 horizontal overflow on every screen" was only true for the inputs tested.
+
+**Fix:** `overflow-wrap: anywhere` on `.summary` and `.notice` in `BoatsPage.module.css`, matching the existing
+`.success` notice. `.notice` also wraps load-error and not-found messages. Normal sentences are unaffected.
+
+**Verification performed:**
+
+| Check | Result |
+|---|---|
+| Frontend `format:check`, `lint`, `typecheck`, `test`, `build` | all pass; **95 tests** in 10 files |
+| Rebuilt frontend container | served CSS hash matches the local build |
+| 150-char matching search and 200-char no-match search at 375/430/768 | document width = screen width; summary and notice text width = box width |
+| Negative control (fix disabled with an injected style) | overflow returns at every width: 958 px (the developer's exact string), 1324 px and 1157 px, so the check detects it |
+| Developer's exact string (first 150 chars) at 375 | boat created, found by search, document 375 px; deleted (204, then 404) |
+| Audit hardened and rerun twice | it now compares against `screen.width`, flags any element whose text is wider than its box, and includes both long-search cases; 0 overflow, text overflow, overlap or input below 16 px on every screen at every width |
+| Cleanup | 13 reseeded `MobileQA` boats verified by ID and seed time and deleted (13 × 204, then 404); 3 boats remain (2 pre-existing plus the developer's manual test boat, left untouched) |
+
+**Limitations:** as above. Emulation only, no real iOS Safari and no device. Only text the audit searched
+for is covered; other user-supplied strings shown elsewhere were checked by reading the CSS.

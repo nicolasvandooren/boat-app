@@ -42,6 +42,8 @@
   background: var(--color-surface);
   color: var(--color-navy-900);
   font: inherit;
+  /* 16px or more: iOS Safari zooms the page when a smaller input gets focus. */
+  font-size: var(--font-size-md);
   font-weight: 400;
 }
 
@@ -59,6 +61,8 @@
   min-height: 1.5em;
   color: var(--color-navy-500);
   font-size: var(--font-size-sm);
+  /* Echoes the search term, which can be one long word. */
+  overflow-wrap: anywhere;
 }
 
 .grid {
@@ -195,6 +199,7 @@
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
+  overflow-wrap: anywhere;
 }
 
 .notice p:last-child {
